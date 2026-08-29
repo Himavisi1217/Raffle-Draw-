@@ -48,7 +48,7 @@ endblock %} {% block content %}
           class="btn btn-primary btn-modern btn-sm"
         >
           <i data-lucide="play-circle" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
-          Open Randomizer
+          Open Raffle Draw
         </a>
         <a
           href="{{ url_for('export_participants', event_id=event.id) }}"
@@ -92,11 +92,11 @@ endblock %} {% block content %}
           <div class="row g-3">
             <div class="col-md-6">
               <label for="portal_title" class="form-label">Portal Title</label>
-              <input type="text" class="form-control form-control-modern" id="portal_title" name="portal_title" value="{{ event.portal_title or event.name or 'Event Randomizer' }}" required />
+              <input type="text" class="form-control form-control-modern" id="portal_title" name="portal_title" value="{{ event.portal_title or event.name or 'Raffle Draw' }}" required />
             </div>
             <div class="col-md-6">
               <label for="banner_title" class="form-label">Banner Headline</label>
-              <input type="text" class="form-control form-control-modern" id="banner_title" name="banner_title" value="{{ event.banner_title or event.portal_title or event.name or 'Event Randomizer' }}" />
+              <input type="text" class="form-control form-control-modern" id="banner_title" name="banner_title" value="{{ event.banner_title or event.portal_title or event.name or 'Raffle Draw' }}" />
             </div>
             <div class="col-md-8">
               <label for="banner_subtitle" class="form-label">Banner Subheading</label>
