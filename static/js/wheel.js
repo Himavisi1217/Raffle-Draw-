@@ -2,81 +2,128 @@
 
 // The current event ID is passed from the Flask template to the window object
 const EVENT_ID = window.CURRENT_EVENT_ID || "";
-// Endpoint to fetch participants for the current event
 const API_PARTICIPANTS = `/api/participants/${EVENT_ID}`;
+const API_PRIZES = `/api/prizes/${EVENT_ID}`;
 
-// In-memory list of all participants loaded from the backend
-let participants = [];
-// List of participants who have already won (to avoid picking them again)
+// In-memory lists loaded from the backend
+let participants = Array.isArray(window.INITIAL_PARTICIPANTS) ? window.INITIAL_PARTICIPANTS : [];
+let prizes = Array.isArray(window.INITIAL_PRIZES) ? window.INITIAL_PRIZES : [];
+
+// List of paired winners: { winner: participantObj, prize: prizeObj }
 let selectedWinners = [];
-// Flag to prevent multiple spins at the same time
 let spinning = false;
 
 // DOM Elements
 const canvas = document.getElementById("wheelCanvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas ? canvas.getContext("2d") : null;
 const spinButton = document.getElementById("spinButton");
 const clearButton = document.getElementById("clearButton");
 const winnersList = document.getElementById("winnersList");
 const wheelSelectedName = document.getElementById("wheelSelectedName");
-const participantCountBadge = document.getElementById("participantCountBadge");
+const prizeCountBadge = document.getElementById("prizeCountBadge");
 const winnerCountBadge = document.getElementById("winnerCountBadge");
 const numWinnersInput = document.getElementById("numWinners");
+const raffleLoop = document.getElementById("raffleLoop");
+
+let raffleIndex = 0;
+let raffleTimer = null;
 
 /**
- * Fisher-Yates shuffle algorithm to randomize an array in place.
- * (Currently used as a utility if needed)
+ * Initialization: Fetch data from the server.
  */
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
-
-/**
- * Initialization: Fetch participants from the server and do the initial wheel draw.
- */
-async function loadParticipants() {
+async function loadData() {
   try {
-    const res = await fetch(API_PARTICIPANTS);
-    const data = await res.json();
-    participants = data;
-    
-    // Update the UI with the total count
-    participantCountBadge.textContent = `${participants.length} registered participants`;
-    
-    // Enable/Disable spin button based on availability
-    spinButton.disabled = participants.length === 0;
+    const [partRes, prizeRes] = await Promise.all([
+      fetch(API_PARTICIPANTS),
+      fetch(API_PRIZES)
+    ]);
 
-    // Set the max pickable winners to the number of participants
-    if (participants.length > 0) {
-      numWinnersInput.max = participants.length;
+    if (!partRes.ok || !prizeRes.ok) {
+      throw new Error("Unable to load raffle data");
     }
 
-    // Initial render of the wheel
+    const fetchedParticipants = await partRes.json();
+    const fetchedPrizes = await prizeRes.json();
+    if (!Array.isArray(fetchedParticipants) || !Array.isArray(fetchedPrizes)) {
+      throw new Error("Raffle data has an invalid format");
+    }
+    participants = fetchedParticipants;
+    prizes = fetchedPrizes;
+    
+    // Update the UI with the total counts
+    if (prizeCountBadge) {
+      prizeCountBadge.innerHTML = `<i data-lucide="gift" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"></i>${prizes.length} prizes | ${participants.length} participants`;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    updateRaffleLoop();
+    updateButtonState();
+    
+    // Set the max pickable winners to the minimum of available participants and prizes
+    const maxPicks = Math.min(participants.length, prizes.length);
+    if (maxPicks > 0) {
+      numWinnersInput.max = maxPicks;
+    }
+
     drawWheel();
   } catch (e) {
-    participantCountBadge.textContent = "Error loading participants";
-    spinButton.disabled = true;
+    if (prizeCountBadge) {
+      prizeCountBadge.textContent = prizes.length
+        ? `${prizes.length} prizes | refresh unavailable`
+        : "Unable to load prizes";
+    }
+    if (raffleLoop && !participants.length) {
+      raffleLoop.textContent = "Unable to load participants. Please refresh.";
+    }
+    updateButtonState();
+    drawWheel();
+  }
+}
+
+function updateButtonState() {
+  const availableParticipants = participants.filter(
+    (p) => !selectedWinners.some((w) => w.winner.id === p.id)
+  );
+  const availablePrizes = prizes.filter(
+    (pr) => !selectedWinners.some((w) => w.prize.id === pr.id)
+  );
+
+  if (spinButton) {
+    spinButton.disabled = availableParticipants.length === 0 || availablePrizes.length === 0 || spinning;
   }
 }
 
 /**
- * Core Drawing Logic: Renders the wheel slices and participant names on the Canvas.
+ * Core Drawing Logic: Renders the wheel slices with PRIZES on the Canvas.
  */
 function drawWheel() {
-  // If no participants, draw a neutral empty circle
-  if (!participants.length) {
+  if (!ctx || !canvas) return;
+
+  const availablePrizes = prizes.filter(
+    (pr) => !selectedWinners.some((w) => w.prize.id === pr.id)
+  );
+  const wheelColors = [
+    "#b9e8d2",
+    "#b9dff2",
+    "#f4d7a8",
+    "#d7c8ed",
+    "#f2c7c7",
+    "#c9e3d8",
+    "#c9d9ef",
+    "#ead9b8",
+  ];
+
+  // If no prizes available to spin for, draw a neutral empty circle
+  if (!availablePrizes.length) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#f8fafc";
+    ctx.fillStyle = "#eaf8f3";
     ctx.beginPath();
     ctx.arc(160, 160, 150, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#64748b";
-    ctx.font = "16px Poppins, system-ui, sans-serif";
+    ctx.fillStyle = "#516d66";
+    ctx.font = "600 14px 'Poppins', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("No participants yet", 160, 165);
+    ctx.fillText(prizes.length ? "All prizes won!" : "No prizes yet", 160, 165);
     return;
   }
 
@@ -84,67 +131,70 @@ function drawWheel() {
   const cy = canvas.height / 2;
   const radius = 150;
 
-  // Filter out participants who have already won in this session
-  const availableParticipants = participants.filter(
-    (p) => !selectedWinners.some((w) => w.id === p.id),
-  );
-
-  // If everyone has won, clear the wheel
-  if (availableParticipants.length === 0) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#f8fafc";
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fill();
-    return;
-  }
-
   // Calculate angle for each slice
-  const sliceAngle = (2 * Math.PI) / availableParticipants.length;
+  const sliceAngle = (2 * Math.PI) / availablePrizes.length;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Iterate and draw each slice
-  availableParticipants.forEach((p, index) => {
+  availablePrizes.forEach((pr, index) => {
     const startAngle = index * sliceAngle;
     const endAngle = startAngle + sliceAngle;
 
-    // Use HSL for dynamic, aesthetic colors
-    const hue = (index * (360 / availableParticipants.length)) % 360;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, radius, startAngle, endAngle);
     ctx.closePath();
-    ctx.fillStyle = `hsl(${hue}, 80%, 85%)`;
+    ctx.fillStyle = wheelColors[index % wheelColors.length];
     ctx.fill();
+    
+    // Subtle border between slices
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
-    // Draw participant name inside the slice
+    // Draw PRIZE name inside the slice
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(startAngle + sliceAngle / 2);
     ctx.textAlign = "right";
-    ctx.fillStyle = "#1e293b";
-    ctx.font = "12px Poppins, system-ui, sans-serif";
-    // Offset text so it stays within the outer edge
-    ctx.fillText(p.name, radius - 15, 4);
+    ctx.fillStyle = "#173f36";
+    ctx.font = "600 12px 'Poppins', sans-serif";
+    // Shadow for text readability
+    ctx.shadowColor = "rgba(255,255,255,0.7)";
+    ctx.shadowBlur = 4;
+    
+    // Truncate long prize names
+    let label = pr.name;
+    if (label.length > 15) label = label.substring(0, 15) + '...';
+    
+    ctx.fillText(label, radius - 20, 4);
     ctx.restore();
   });
 }
 
 /**
- * Updates the "Winners" sidebar with the list of people picked.
+ * Updates the "Winners" sidebar with the list of people picked and their prizes.
  */
 function updateWinnersUI() {
   winnersList.innerHTML = "";
-  selectedWinners.forEach((w, index) => {
+  selectedWinners.forEach((item, index) => {
     const li = document.createElement("li");
     li.className =
       "list-group-item d-flex justify-content-between align-items-start";
     li.style.animation = "fadeIn 0.5s ease-in-out";
     li.innerHTML = `
-      <div class="me-2">
-        <div class="fw-semibold text-primary">${index + 1}. ${w.name}</div>
-        <div class="text-muted small">${w.company_name} · ${w.position}</div>
+      <div class="me-2 w-100">
+        <div class="d-flex justify-content-between">
+           <div class="fw-semibold text-primary">
+             ${index + 1}. <span class="text-white">${item.winner.name}</span>
+           </div>
+        </div>
+        <div class="text-muted small mb-1">${item.winner.company_name} · ${item.winner.position}</div>
+        <div class="badge bg-success-soft text-success text-wrap text-start mt-1">
+          <i data-lucide="gift" style="width:10px;height:10px;margin-right:2px;vertical-align:-1px"></i>
+          Won: ${item.prize.name}
+        </div>
       </div>
     `;
     
@@ -157,6 +207,8 @@ function updateWinnersUI() {
     }
     winnersList.appendChild(li);
   });
+  
+  if (window.lucide) lucide.createIcons();
 
   if (winnerCountBadge) {
     winnerCountBadge.textContent = `${selectedWinners.length} selected`;
@@ -164,42 +216,83 @@ function updateWinnersUI() {
 }
 
 /**
- * Helper to wait for a certain amount of time (used for suspense between spins).
+ * Live raffle loop: continuously cycles through the participant names.
+ */
+function updateRaffleLoop() {
+ if (!raffleLoop) return;
+
+ if (!participants.length) {
+   raffleLoop.textContent = "Waiting for participants...";
+   return;
+ }
+
+ const loopNames = participants.map((p) => p.name).filter(Boolean);
+ if (!loopNames.length) {
+   raffleLoop.textContent = "Waiting for participants...";
+   return;
+ }
+
+ const nextName = loopNames[raffleIndex % loopNames.length];
+ raffleLoop.textContent = `Now showing: ${nextName}`;
+ raffleIndex += 1;
+
+ if (raffleTimer) clearInterval(raffleTimer);
+ raffleTimer = setInterval(() => {
+   if (!participants.length || spinning) return;
+   const activeNames = participants.map((p) => p.name).filter(Boolean);
+   if (!activeNames.length) return;
+   raffleIndex = (raffleIndex + 1) % activeNames.length;
+   raffleLoop.textContent = `Now showing: ${activeNames[raffleIndex]}`;
+ }, 1400);
+}
+
+/**
+ * Helper to wait for a certain amount of time.
  */
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+ return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * Main Controller for the spinning animation and selection logic.
  */
 async function spinAndPickLocal() {
-  if (spinning || !participants.length) return;
+  if (spinning || !numWinnersInput || !spinButton || !wheelSelectedName || !clearButton) return;
 
-  const numWinners = parseInt(numWinnersInput.value, 10) || 1;
+  const requestedWinners = parseInt(numWinnersInput.value, 10) || 1;
+  const numWinners = Math.max(
+    1,
+    Math.min(requestedWinners, participants.length, prizes.length)
+  );
 
   spinning = true;
-  spinButton.disabled = true;
+  updateButtonState();
   clearButton.disabled = true;
+  spinButton.classList.add("btn-spinning");
 
   for (let i = 0; i < numWinners; i++) {
-    // Determine who is left to pick from
+    // Determine available pools
     const availableParticipants = participants.filter(
-      (p) => !selectedWinners.some((w) => w.id === p.id),
+      (p) => !selectedWinners.some((w) => w.winner.id === p.id)
+    );
+    const availablePrizes = prizes.filter(
+      (pr) => !selectedWinners.some((w) => w.prize.id === pr.id)
     );
     
-    if (availableParticipants.length === 0) {
-      wheelSelectedName.textContent = "All Picked!";
+    if (availableParticipants.length === 0 || availablePrizes.length === 0) {
+      wheelSelectedName.textContent = "Finished!";
       break;
     }
 
-    wheelSelectedName.textContent = "Spinning...";
+    wheelSelectedName.innerHTML = `<span class="text-primary">Spinning...</span>`;
 
-    // Pre-calculate the winner locally
-    const randomIndex = Math.floor(
-      Math.random() * availableParticipants.length,
-    );
-    const thisWinner = availableParticipants[randomIndex];
+    // 1. Randomly pick the PRIZE for the visual wheel
+    const randomPrizeIndex = Math.floor(Math.random() * availablePrizes.length);
+    const thisPrize = availablePrizes[randomPrizeIndex];
+    
+    // 2. Randomly pick the PARTICIPANT in the background
+    const randomWinnerIndex = Math.floor(Math.random() * availableParticipants.length);
+    const thisWinner = availableParticipants[randomWinnerIndex];
 
     // Animation settings
     const duration = 2500; // 2.5 seconds
@@ -215,15 +308,14 @@ async function spinAndPickLocal() {
         const eased = 1 - Math.pow(1 - t, 3);
         
         const randomExtraSpins = Math.PI * 8; // Adds 4 full turns for momentum
-        const sliceAngle = (2 * Math.PI) / availableParticipants.length;
+        const sliceAngle = (2 * Math.PI) / availablePrizes.length;
         const targetAngleForTop = -Math.PI / 2; // -90 deg (where the visual pointer sits)
 
-        // Calculate where the winner segment's center is on the circle
-        const winnerCenterAngle = randomIndex * sliceAngle + sliceAngle / 2;
+        // Calculate where the PRIZE segment's center is on the circle
+        const winnerCenterAngle = randomPrizeIndex * sliceAngle + sliceAngle / 2;
 
-        // Determine final rotation needed to line up the winner under the arrow
-        const endRotation =
-          randomExtraSpins + (targetAngleForTop - winnerCenterAngle);
+        // Determine final rotation needed to line up the PRIZE under the arrow
+        const endRotation = randomExtraSpins + (targetAngleForTop - winnerCenterAngle);
 
         const currentAngle = eased * endRotation;
 
@@ -246,26 +338,26 @@ async function spinAndPickLocal() {
     });
 
     // Finalize the pick
-    selectedWinners.push(thisWinner);
+    selectedWinners.push({ winner: thisWinner, prize: thisPrize });
     updateWinnersUI();
-    wheelSelectedName.textContent = thisWinner.name;
+    wheelSelectedName.innerHTML = `<span class="text-gradient">${thisPrize.name}</span>`;
 
     // Pause for suspense if more picks are coming
-    if (i < numWinners - 1 && availableParticipants.length > 1) {
+    if (i < numWinners - 1 && availableParticipants.length > 1 && availablePrizes.length > 1) {
       await sleep(1500);
     }
   }
 
-  // Final draw to update states
+  // Final draw to update states (removes won prizes from the wheel)
   drawWheel();
 
   spinning = false;
-  // Re-enable/Disable button based on remaining pool
-  spinButton.disabled = selectedWinners.length >= participants.length;
+  spinButton.classList.remove("btn-spinning");
+  updateButtonState();
   clearButton.disabled = false;
 
   if (selectedWinners.length > 0) {
-    wheelSelectedName.textContent = "Draw Complete";
+    wheelSelectedName.innerHTML = `<span class="text-gradient">Complete</span>`;
   }
 }
 
@@ -276,8 +368,9 @@ function clearWinners() {
   selectedWinners = [];
   updateWinnersUI();
   wheelSelectedName.textContent = "Ready";
+  if (raffleLoop) raffleLoop.textContent = "Now showing: " + (participants[0]?.name || "Waiting for participants...");
   drawWheel();
-  spinButton.disabled = participants.length === 0;
+  updateButtonState();
 }
 
 // --- EVENT LISTENERS ---
@@ -292,13 +385,13 @@ if (clearButton) {
 
 // Kick off the initial load
 if (canvas) {
-  loadParticipants();
+  loadData();
   
-  // Real-time update: poll the backend every 5 seconds to get new participants
+  // Real-time update: poll the backend every 5 seconds to get new data
   setInterval(() => {
     // Only refresh if not currently spinning to avoid visual glitches
     if (!spinning) {
-      loadParticipants();
+      loadData();
     }
   }, 5000); // 5 seconds interval
 }

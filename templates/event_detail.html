@@ -6,37 +6,56 @@ endblock %} {% block content %}
       class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2"
     >
       <div>
-        <h1 class="h4 fw-semibold mb-1">{{ event.name }}</h1>
+        <h1 class="h4 fw-semibold mb-1 text-gradient">{{ event.name }}</h1>
         <p class="text-muted mb-0">
           Manage participants for this specific event.
         </p>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex flex-wrap gap-2 event-actions">
         <a
           href="{{ url_for('admin_dashboard') }}"
           class="btn btn-outline-dark btn-modern btn-sm"
         >
-          &larr; Back to Events
+          <i data-lucide="arrow-left" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          Back to Events
         </a>
         <button
-          class="btn btn-primary btn-modern btn-sm"
+          class="btn btn-outline-primary btn-modern btn-sm"
           data-bs-toggle="modal"
           data-bs-target="#addParticipantModal"
         >
-          + Add Participant
+          <i data-lucide="user-plus" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          Add Participant
+        </button>
+        <button
+          class="btn btn-outline-secondary btn-modern btn-sm"
+          data-bs-toggle="modal"
+          data-bs-target="#addPrizeModal"
+        >
+          <i data-lucide="gift" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          Add Prize
         </button>
         <button
           class="btn btn-success btn-modern btn-sm"
           data-bs-toggle="modal"
           data-bs-target="#qrCodeModal"
         >
+          <i data-lucide="qr-code" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
           Show QR Code
         </button>
         <a
           href="{{ url_for('wheel', event_id=event.id) }}"
           class="btn btn-primary btn-modern btn-sm"
         >
+          <i data-lucide="play-circle" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
           Open Randomizer
+        </a>
+        <a
+          href="{{ url_for('export_participants', event_id=event.id) }}"
+          class="btn btn-outline-primary btn-modern btn-sm"
+        >
+          <i data-lucide="file-spreadsheet" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          Download Excel
         </a>
         <form
           method="post"
@@ -48,7 +67,8 @@ endblock %} {% block content %}
           "
           class="d-inline"
         >
-          <button type="submit" class="btn btn-danger btn-modern btn-sm ms-2">
+          <button type="submit" class="btn btn-outline-danger btn-modern btn-sm ms-md-2 mt-2 mt-md-0">
+            <i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
             End Event (Wipe Data)
           </button>
         </form>
@@ -57,16 +77,129 @@ endblock %} {% block content %}
 
     <div class="card card-glass shadow-lg border-0 mb-4">
       <div class="card-body p-3 p-md-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div>
+            <h2 class="h6 fw-semibold mb-1">
+              <i data-lucide="paintbrush-2" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--text-muted)"></i>
+              Event Branding & Portal Title
+            </h2>
+            <p class="text-muted mb-0 small">Adjust the portal name, banner text and color for this event.</p>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('admin_event_detail', event_id=event.id) }}">
+          <input type="hidden" name="form_type" value="event_settings" />
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="portal_title" class="form-label">Portal Title</label>
+              <input type="text" class="form-control form-control-modern" id="portal_title" name="portal_title" value="{{ event.portal_title or event.name or 'Event Randomizer' }}" required />
+            </div>
+            <div class="col-md-6">
+              <label for="banner_title" class="form-label">Banner Headline</label>
+              <input type="text" class="form-control form-control-modern" id="banner_title" name="banner_title" value="{{ event.banner_title or event.portal_title or event.name or 'Event Randomizer' }}" />
+            </div>
+            <div class="col-md-8">
+              <label for="banner_subtitle" class="form-label">Banner Subheading</label>
+              <input type="text" class="form-control form-control-modern" id="banner_subtitle" name="banner_subtitle" value="{{ event.banner_subtitle or '' }}" placeholder="e.g. Winners will be announced live" />
+            </div>
+            <div class="col-md-4">
+              <label for="accent_color" class="form-label">Accent Color</label>
+              <input type="color" class="form-control form-control-modern form-control-color" id="accent_color" name="accent_color" value="{{ event.accent_color or '#5FE0A5' }}" />
+            </div>
+            <div class="col-12">
+              <label for="banner_message" class="form-label">Banner Message</label>
+              <textarea class="form-control form-control-modern" id="banner_message" name="banner_message" rows="3" placeholder="Add a short message or instruction for the raffle page">{{ event.banner_message or '' }}</textarea>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end mt-3">
+            <button type="submit" class="btn btn-primary btn-modern">
+              <i data-lucide="save" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+              Save Branding
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card card-glass shadow-lg border-0 mb-4">
+      <div class="card-body p-3 p-md-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h2 class="h6 fw-semibold mb-0">Registered Participants</h2>
-          <span class="badge bg-secondary-soft text-secondary">
+          <h2 class="h6 fw-semibold mb-0">
+            <i data-lucide="gift" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--text-muted)"></i>
+            Event Prizes
+          </h2>
+          <div class="d-flex align-items-center gap-2">
+            <span id="prizeCountBadge" class="badge bg-secondary-soft text-secondary">
+              Total: {{ prizes|length }}
+            </span>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm btn-modern"
+              data-bs-toggle="modal"
+              data-bs-target="#addPrizeModal"
+            >
+              <i data-lucide="plus" style="width:13px;height:13px;margin-right:4px;vertical-align:-2px"></i>
+              Add Prize
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small">
+            <thead>
+              <tr>
+                <th scope="col">Prize Name</th>
+                <th scope="col">Added Date</th>
+                <th scope="col" class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="prizesTableBody">
+              {% if prizes %} {% for prize in prizes %}
+              <tr>
+                <td><strong>{{ prize.name }}</strong></td>
+                <td class="text-muted">{{ prize.created_at[:10] if prize.created_at else 'N/A' }}</td>
+                <td class="text-end">
+                  <form
+                    method="post"
+                    action="{{ url_for('delete_prize', event_id=event.id, prize_id=prize.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Delete this prize?');"
+                  >
+                    <button type="submit" class="btn btn-outline-danger btn-sm btn-modern" title="Delete">
+                      <i data-lucide="trash" style="width:12px;height:12px"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %} {% else %}
+              <tr>
+                <td colspan="3" class="text-center text-muted py-5">
+                  <i data-lucide="gift" style="width:28px;height:28px;margin-bottom:8px;display:block;margin:0 auto 8px"></i>
+                  No prizes have been added yet.
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-glass shadow-lg border-0 mb-4">
+      <div class="card-body p-3 p-md-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h6 fw-semibold mb-0">
+            <i data-lucide="users" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--text-muted)"></i>
+            Registered Participants
+          </h2>
+          <span id="participantCountBadge" class="badge bg-secondary-soft text-secondary">
             Total: {{ participants|length }}
           </span>
         </div>
 
         <div class="table-responsive">
           <table class="table table-hover align-middle mb-0 small">
-            <thead class="table-light">
+            <thead>
               <tr>
                 <th scope="col">Name</th>
                 <th scope="col">Company</th>
@@ -76,10 +209,10 @@ endblock %} {% block content %}
                 <th scope="col" class="text-end">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="participantsTableBody">
               {% if participants %} {% for p in participants %}
               <tr>
-                <td>{{ p.name }}</td>
+                <td><strong>{{ p.name }}</strong></td>
                 <td>{{ p.company_name }}</td>
                 <td>{{ p.position }}</td>
                 <td>{{ p.mobile_number }}</td>
@@ -87,9 +220,10 @@ endblock %} {% block content %}
                 <td class="text-end">
                   <a
                     href="{{ url_for('edit_participant', event_id=event.id, participant_id=p.id) }}"
-                    class="btn btn-outline-dark btn-sm btn-modern me-1"
+                    class="btn btn-outline-secondary btn-sm btn-modern me-1"
+                    title="Edit"
                   >
-                    Edit
+                    <i data-lucide="edit-2" style="width:12px;height:12px"></i>
                   </a>
                   <form
                     method="post"
@@ -100,8 +234,9 @@ endblock %} {% block content %}
                     <button
                       type="submit"
                       class="btn btn-outline-danger btn-sm btn-modern"
+                      title="Delete"
                     >
-                      Delete
+                      <i data-lucide="trash" style="width:12px;height:12px"></i>
                     </button>
                   </form>
                 </td>
@@ -109,6 +244,7 @@ endblock %} {% block content %}
               {% endfor %} {% else %}
               <tr>
                 <td colspan="6" class="text-center text-muted py-5">
+                  <i data-lucide="users" style="width:28px;height:28px;margin-bottom:8px;display:block;margin:0 auto 8px"></i>
                   No participants have registered for this event yet.
                 </td>
               </tr>
@@ -133,6 +269,7 @@ endblock %} {% block content %}
     <div class="modal-content card-glass border-0 text-center">
       <div class="modal-header border-bottom-0 pb-0 justify-content-center">
         <h5 class="modal-title fw-semibold" id="qrCodeModalLabel">
+          <i data-lucide="scan" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--accent-success)"></i>
           Scan to Register
         </h5>
         <button
@@ -147,14 +284,18 @@ endblock %} {% block content %}
         <p class="text-muted small mb-3">
           Guests can scan this to join <strong>{{ event.name }}</strong>
         </p>
-        <img
-          id="qrImage"
-          src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ url_for('register', event_id=event.id, _external=True) }}"
-          alt="QR Code"
-          class="img-fluid rounded shadow-sm border mb-3"
-        />
+        <div class="p-3 bg-white rounded mb-3 d-inline-block shadow-sm">
+          <img
+            id="qrImage"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ url_for('register', event_id=event.id, _external=True) }}"
+            alt="QR Code"
+            class="img-fluid"
+            style="max-width: 200px"
+          />
+        </div>
         <div class="d-grid gap-2">
           <button onclick="downloadQR()" class="btn btn-outline-primary btn-sm btn-modern">
+            <i data-lucide="download" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
             Download QR Code
           </button>
         </div>
@@ -171,10 +312,11 @@ endblock %} {% block content %}
   aria-labelledby="addParticipantModalLabel"
   aria-hidden="true"
 >
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content card-glass border-0">
       <div class="modal-header border-bottom-0 pb-0">
         <h5 class="modal-title fw-semibold" id="addParticipantModalLabel">
+          <i data-lucide="user-plus" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--accent-primary)"></i>
           Manually Add Participant
         </h5>
         <button
@@ -190,7 +332,7 @@ endblock %} {% block content %}
       >
         <div class="modal-body">
           <div class="mb-3">
-            <label for="name" class="form-label text-muted small"
+            <label for="name" class="form-label"
               >Full Name</label
             >
             <input
@@ -202,7 +344,7 @@ endblock %} {% block content %}
             />
           </div>
           <div class="mb-3">
-            <label for="mobile_number" class="form-label text-muted small"
+            <label for="mobile_number" class="form-label"
               >Mobile Number</label
             >
             <input
@@ -214,7 +356,7 @@ endblock %} {% block content %}
             />
           </div>
           <div class="mb-3">
-            <label for="company_name" class="form-label text-muted small"
+            <label for="company_name" class="form-label"
               >Company Name</label
             >
             <input
@@ -226,7 +368,7 @@ endblock %} {% block content %}
             />
           </div>
           <div class="mb-3">
-            <label for="position" class="form-label text-muted small"
+            <label for="position" class="form-label"
               >Position</label
             >
             <input
@@ -238,7 +380,7 @@ endblock %} {% block content %}
             />
           </div>
           <div class="mb-3">
-            <label for="email" class="form-label text-muted small"
+            <label for="email" class="form-label"
               >Email Address</label
             >
             <input
@@ -259,12 +401,44 @@ endblock %} {% block content %}
             Cancel
           </button>
           <button type="submit" class="btn btn-primary btn-modern">
+            <i data-lucide="check" style="width:16px;height:16px;margin-right:4px;vertical-align:-2px"></i>
             Add Participant
           </button>
         </div>
       </form>
     </div>
   </div>
+</div>
+
+<!-- Add Prize Modal -->
+<div class="modal fade" id="addPrizeModal" tabindex="-1" aria-labelledby="addPrizeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content card-glass border-0">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-semibold" id="addPrizeModalLabel">
+          <i data-lucide="gift" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px;color:var(--accent-primary)"></i>
+          Add New Prize
+        </h5>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('add_prize', event_id=event.id) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="prize_name" class="form-label">Prize Name</label>
+            <input type="text" class="form-control form-control-modern" id="prize_name" name="name" required placeholder="e.g. iPad Pro" />
+          </div>
+        </div>
+        <div class="modal-footer border-top-0 pt-0">
+          <button type="button" class="btn btn-outline-dark btn-modern" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-modern">
+            <i data-lucide="check" style="width:16px;height:16px;margin-right:4px;vertical-align:-2px"></i> Add Prize
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -272,8 +446,8 @@ endblock %} {% block content %}
   // Script to update the participant list in real-time
   const EVENT_ID = "{{ event.id }}";
   const FETCH_URL = `/api/participants/${EVENT_ID}`;
-  const tableBody = document.querySelector("tbody");
-  const totalBadge = document.querySelector(".badge.bg-secondary-soft");
+  const tableBody = document.getElementById("participantsTableBody");
+  const totalBadge = document.getElementById("participantCountBadge");
 
   async function refreshParticipants() {
     // Only refresh if the "Add Participant" modal is NOT open to avoid focus issues
@@ -282,7 +456,13 @@ endblock %} {% block content %}
 
     try {
       const response = await fetch(FETCH_URL);
+      if (!response.ok) {
+        throw new Error(`Participant refresh failed: ${response.status}`);
+      }
       const participants = await response.json();
+      if (!Array.isArray(participants) || !tableBody) {
+        throw new Error("Participant refresh returned an invalid response");
+      }
 
       // Update the "Total Count" badge
       if (totalBadge) totalBadge.textContent = `Total: ${participants.length}`;
@@ -291,9 +471,11 @@ endblock %} {% block content %}
         tableBody.innerHTML = `
           <tr>
             <td colspan="6" class="text-center text-muted py-5">
+              <i data-lucide="users" style="width:28px;height:28px;margin-bottom:8px;display:block;margin:0 auto 8px"></i>
               No participants have registered for this event yet.
             </td>
           </tr>`;
+        lucide.createIcons();
         return;
       }
 
@@ -306,20 +488,25 @@ endblock %} {% block content %}
 
         rowsHtml += `
           <tr>
-            <td>${p.name}</td>
+            <td><strong>${p.name}</strong></td>
             <td>${p.company_name}</td>
             <td>${p.position}</td>
             <td>${p.mobile_number}</td>
             <td>${p.email}</td>
             <td class="text-end">
-              <a href="${editUrl}" class="btn btn-outline-dark btn-sm btn-modern me-1">Edit</a>
+              <a href="${editUrl}" class="btn btn-outline-secondary btn-sm btn-modern me-1" title="Edit">
+                <i data-lucide="edit-2" style="width:12px;height:12px"></i>
+              </a>
               <form method="post" action="${deleteUrl}" class="d-inline" onsubmit="return confirm('Delete this participant?');">
-                <button type="submit" class="btn btn-outline-danger btn-sm btn-modern">Delete</button>
+                <button type="submit" class="btn btn-outline-danger btn-sm btn-modern" title="Delete">
+                  <i data-lucide="trash" style="width:12px;height:12px"></i>
+                </button>
               </form>
             </td>
           </tr>`;
       });
       tableBody.innerHTML = rowsHtml;
+      lucide.createIcons();
     } catch (e) {
       console.error("Error refreshing participants:", e);
     }

@@ -2,6 +2,8 @@ import os
 import random
 import datetime
 import uuid
+import csv
+import io
 from functools import wraps
 from urllib.parse import urlparse
 
@@ -16,6 +18,7 @@ from flask import (
     flash,
     jsonify,
     session,
+    send_file,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -98,10 +101,14 @@ def register(event_id):
         company_name = request.form.get("company_name", "").strip()
         position = request.form.get("position", "").strip()
         email = request.form.get("email", "").strip().lower()
+        data_sharing_consent = request.form.get("data_sharing_consent") == "on"
 
         # Basic validation
         if not all([name, mobile_number, company_name, position, email]):
             flash("Please fill in all fields.", "danger")
+            return redirect(url_for("register", event_id=event_id))
+        if not data_sharing_consent:
+            flash("Please confirm that you would like to share your data with the publishers.", "warning")
             return redirect(url_for("register", event_id=event_id))
 
         # Check for duplicate email in this specific event to prevent double registration
@@ -121,6 +128,8 @@ def register(event_id):
             "company_name": company_name,
             "position": position,
             "email": email,
+            "data_sharing_consent": True,
+            "data_sharing_consent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         
@@ -149,7 +158,33 @@ def wheel(event_id):
     event_url = get_firebase_url(f"/events/{event_id}")
     resp = requests.get(event_url)
     event_data = resp.json() or {}
-    return render_template("wheel.html", event_id=event_id, event=event_data)
+    prize_resp = requests.get(get_firebase_url(f"/prizes/{event_id}"))
+    prize_data = prize_resp.json() if prize_resp.status_code == 200 else {}
+    participant_resp = requests.get(get_firebase_url(f"/participants/{event_id}"))
+    participant_data = participant_resp.json() if participant_resp.status_code == 200 else {}
+    initial_prizes = []
+    initial_participants = []
+    if isinstance(prize_data, dict):
+        for prize_id, prize in prize_data.items():
+            if isinstance(prize, dict):
+                prize = dict(prize)
+                prize["id"] = prize_id
+                initial_prizes.append(prize)
+    if isinstance(participant_data, dict):
+        for participant_id, participant in participant_data.items():
+            if isinstance(participant, dict):
+                participant = dict(participant)
+                participant["id"] = participant_id
+                initial_participants.append(participant)
+    initial_prizes.sort(key=lambda item: item.get("created_at", ""))
+    initial_participants.sort(key=lambda item: item.get("created_at", ""))
+    return render_template(
+        "wheel.html",
+        event_id=event_id,
+        event=event_data,
+        initial_prizes=initial_prizes,
+        initial_participants=initial_participants,
+    )
 
 
 @app.route("/api/participants/<event_id>")
@@ -173,6 +208,31 @@ def api_participants(event_id):
     # Sort by registration time
     participants.sort(key=lambda x: x.get("created_at", ""))
     return jsonify(participants)
+
+
+@app.route("/api/prizes/<event_id>")
+@login_required
+def api_prizes(event_id):
+    """
+    API endpoint that returns a list of prizes for a given event.
+    Used by the wheel.js to populate the wheel segments.
+    """
+    url = get_firebase_url(f"/prizes/{event_id}")
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        return jsonify({"error": "Unable to load prizes."}), 502
+    data = resp.json() or {}
+    
+    prizes = []
+    if isinstance(data, dict):
+        for pid, pdata in data.items():
+            if isinstance(pdata, dict):
+                pdata = dict(pdata)
+                pdata["id"] = pid
+                prizes.append(pdata)
+            
+    prizes.sort(key=lambda x: x.get("created_at", ""))
+    return jsonify(prizes)
 
 
 @app.route("/api/random-winners/<event_id>")
@@ -216,9 +276,20 @@ def admin_dashboard():
     if request.method == "POST":
         event_name = request.form.get("event_name", "").strip()
         if event_name:
+            portal_title = request.form.get("portal_title", event_name).strip() or event_name
+            banner_title = request.form.get("banner_title", event_name).strip() or event_name
+            banner_subtitle = request.form.get("banner_subtitle", "").strip()
+            banner_message = request.form.get("banner_message", "").strip()
+            accent_color = request.form.get("accent_color", "#5FE0A5").strip() or "#5FE0A5"
+
             # Create Event Data
             event_data = {
                 "name": event_name,
+                "portal_title": portal_title,
+                "banner_title": banner_title,
+                "banner_subtitle": banner_subtitle,
+                "banner_message": banner_message,
+                "accent_color": accent_color,
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "admin_id": session.get("admin_id")
             }
@@ -252,6 +323,32 @@ def admin_event_detail(event_id):
     Admins can also manually add participants here.
     """
     if request.method == "POST":
+        form_type = request.form.get("form_type")
+
+        if form_type == "event_settings":
+            title = request.form.get("portal_title", "").strip() or request.form.get("event_name", "").strip()
+            subtitle = request.form.get("banner_subtitle", "").strip()
+            banner_title = request.form.get("banner_title", "").strip()
+            banner_message = request.form.get("banner_message", "").strip()
+            accent_color = request.form.get("accent_color", "#5FE0A5").strip()
+
+            if not title:
+                flash("Event title is required.", "danger")
+                return redirect(url_for("admin_event_detail", event_id=event_id))
+
+            event_payload = {
+                "name": title,
+                "portal_title": title,
+                "banner_title": banner_title or title,
+                "banner_subtitle": subtitle,
+                "banner_message": banner_message,
+                "accent_color": accent_color,
+                "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+            requests.patch(get_firebase_url(f"/events/{event_id}"), json=event_payload)
+            flash("Event branding and title updated successfully.", "success")
+            return redirect(url_for("admin_event_detail", event_id=event_id))
+
         # Form for manual participant registration by admin
         name = request.form.get("name", "").strip()
         mobile_number = request.form.get("mobile_number", "").strip()
@@ -307,7 +404,20 @@ def admin_event_detail(event_id):
             participants.append(pdata)
             
     participants.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    return render_template("event_detail.html", participants=participants, event=event_data)
+
+    url = get_firebase_url(f"/prizes/{event_id}")
+    resp = requests.get(url)
+    data = resp.json() or {}
+    
+    prizes = []
+    if isinstance(data, dict):
+        for pid, pdata in data.items():
+            pdata["id"] = pid
+            prizes.append(pdata)
+            
+    prizes.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+    return render_template("event_detail.html", participants=participants, prizes=prizes, event=event_data)
 
 
 @app.route("/admin/events/<event_id>/end", methods=["POST"])
@@ -319,6 +429,8 @@ def end_event(event_id):
     """
     # Wipe the participants for this event
     requests.delete(get_firebase_url(f"/participants/{event_id}"))
+    # Wipe the prizes for this event
+    requests.delete(get_firebase_url(f"/prizes/{event_id}"))
     # Wipe the entry from the events list
     requests.delete(get_firebase_url(f"/events/{event_id}"))
     flash("Event and all its participants have been completely wiped and removed.", "success")
@@ -332,6 +444,77 @@ def delete_participant(event_id, participant_id):
     url = get_firebase_url(f"/participants/{event_id}/{participant_id}")
     requests.delete(url)
     flash("Participant deleted.", "success")
+    return redirect(url_for("admin_event_detail", event_id=event_id))
+
+
+@app.route("/admin/events/<event_id>/participants/export")
+@login_required
+def export_participants(event_id):
+    """Download all event participants as an Excel-compatible CSV file."""
+    event_resp = requests.get(get_firebase_url(f"/events/{event_id}"))
+    event_data = event_resp.json() if event_resp.status_code == 200 else {}
+    if not event_data:
+        flash("Event not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    participants_resp = requests.get(get_firebase_url(f"/participants/{event_id}"))
+    participants_data = participants_resp.json() if participants_resp.status_code == 200 else {}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Name", "Mobile Number", "Company", "Position", "Email", "Data Sharing Consent", "Registered At"])
+    if isinstance(participants_data, dict):
+        for participant in participants_data.values():
+            if isinstance(participant, dict):
+                writer.writerow([
+                    participant.get("name", ""),
+                    participant.get("mobile_number", ""),
+                    participant.get("company_name", ""),
+                    participant.get("position", ""),
+                    participant.get("email", ""),
+                    "Yes" if participant.get("data_sharing_consent") else "No",
+                    participant.get("created_at", ""),
+                ])
+
+    filename = f"{event_data.get('name', 'event').strip() or 'event'}_participants.csv"
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/admin/events/<event_id>/prizes/add", methods=["POST"])
+@login_required
+def add_prize(event_id):
+    """Manually adds a prize to an event."""
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Prize name is required.", "danger")
+        return redirect(url_for("admin_event_detail", event_id=event_id))
+
+    prize_data = {
+        "name": name,
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
+    
+    post_url = get_firebase_url(f"/prizes/{event_id}")
+    response = requests.post(post_url, json=prize_data)
+    if response.status_code not in (200, 201):
+        flash("Prize could not be saved. Please try again.", "danger")
+        return redirect(url_for("admin_event_detail", event_id=event_id))
+    flash("Prize added manually.", "success")
+    return redirect(url_for("admin_event_detail", event_id=event_id))
+
+
+@app.route("/admin/events/<event_id>/prizes/<prize_id>/delete", methods=["POST"])
+@login_required
+def delete_prize(event_id, prize_id):
+    """Deletes a single prize from an event."""
+    url = get_firebase_url(f"/prizes/{event_id}/{prize_id}")
+    requests.delete(url)
+    flash("Prize deleted.", "success")
     return redirect(url_for("admin_event_detail", event_id=event_id))
 
 

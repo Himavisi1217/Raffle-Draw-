@@ -4,7 +4,10 @@ content %}
   <div class="col-lg-5 col-md-7">
     <div class="card card-glass shadow-lg border-0">
       <div class="card-body p-4 p-md-5">
-        <h1 class="h4 fw-semibold mb-3 text-center">Admin Sign Up</h1>
+        <div class="icon-header mb-3">
+          <i data-lucide="user-plus" style="width:24px;height:24px"></i>
+        </div>
+        <h1 class="h4 fw-semibold mb-2 text-center">Admin Sign Up</h1>
         <p class="text-muted text-center mb-4">
           Create an admin account using the shared secret code.
         </p>
@@ -17,6 +20,7 @@ content %}
               class="form-control form-control-modern"
               id="email"
               name="email"
+              placeholder="admin@example.com"
               required
             />
           </div>
@@ -28,6 +32,7 @@ content %}
               class="form-control form-control-modern"
               id="password"
               name="password"
+              placeholder="••••••••"
               required
             />
           </div>
@@ -41,6 +46,7 @@ content %}
               class="form-control form-control-modern"
               id="confirm_password"
               name="confirm_password"
+              placeholder="••••••••"
               required
             />
           </div>
@@ -54,20 +60,22 @@ content %}
               class="form-control form-control-modern"
               id="secret_code"
               name="secret_code"
+              placeholder="Enter the secret code"
               required
             />
-            <div class="form-text text-muted">
+            <div class="form-text">
               This code should only be shared with trusted organizers.
             </div>
           </div>
 
           <button type="submit" class="btn btn-primary w-100 btn-modern mb-3">
+            <i data-lucide="shield-check" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px"></i>
             Create Admin Account
           </button>
 
           <p class="text-muted small text-center mb-0">
             Already have an account?
-            <a href="{{ url_for('admin_login') }}" class="link-light">Log in</a
+            <a href="{{ url_for('admin_login') }}" class="link-themed">Log in</a
             >.
           </p>
         </form>
