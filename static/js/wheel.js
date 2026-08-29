@@ -187,7 +187,7 @@ function updateWinnersUI() {
       <div class="me-2 w-100">
         <div class="d-flex justify-content-between">
            <div class="fw-semibold text-primary">
-             ${index + 1}. <span class="text-white">${item.winner.name}</span>
+             ${index + 1}. <span class="text-primary">${item.winner.name}</span>
            </div>
         </div>
         <div class="text-muted small mb-1">${item.winner.company_name} · ${item.winner.position}</div>

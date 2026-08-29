@@ -1,28 +1,28 @@
 /* ============================================================
-   EVENT RANDOMIZER — DARK PREMIUM THEME
+   RAFFLE DRAW — LIGHT GLASS THEME
    Design System + Component Styles
    ============================================================ */
 
 /* --- DESIGN TOKENS (CSS Custom Properties) --- */
 :root {
   /* Background layers */
-  --bg-base: #f4fbf8;
-  --bg-surface: #f8fdfb;
-  --bg-elevated: #edfaf5;
-  --bg-card: rgba(255, 255, 255, 0.72);
-  --bg-card-hover: rgba(255, 255, 255, 0.9);
+  --bg-base: #ffffff;
+  --bg-surface: rgba(255, 255, 255, 0.88);
+  --bg-elevated: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.62);
+  --bg-card-hover: rgba(255, 255, 255, 0.82);
 
   /* Text */
-  --text-primary: #12312b;
-  --text-secondary: #516d66;
-  --text-muted: #718a82;
+  --text-primary: #111827;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
   --text-inverse: #ffffff;
 
   /* Accents */
-  --accent-primary: #168f68;
-  --accent-secondary: #187ab8;
-  --accent-gradient: #168f68;
-  --accent-gradient-vivid: #168f68;
+  --accent-primary: #0066cc;
+  --accent-secondary: #008fd5;
+  --accent-gradient: #0066cc;
+  --accent-gradient-vivid: #0066cc;
   --accent-success: #1ca764;
   --accent-danger: #e66161;
   --accent-warning: #e6a34a;
@@ -64,7 +64,7 @@
 body {
   font-family: var(--font-body);
   color: var(--text-primary);
-  background: #f4fbf8;
+  background: #ffffff;
   overflow-x: hidden;
   overflow-y: auto;
   min-width: 320px;
@@ -81,7 +81,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 a {
-  color: #1b8c72;
+  color: var(--accent-primary);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
@@ -93,7 +93,7 @@ a:hover {
 /* --- ANIMATED BACKGROUND --- */
 .bg-gradient {
   min-height: 100vh;
-  background: #f4fbf8;
+  background: #ffffff;
   position: relative;
   overflow: visible;
 }
@@ -101,17 +101,38 @@ a:hover {
 .bg-gradient::before {
   content: '';
   position: fixed;
-  inset: 0;
-  background: rgba(95, 224, 165, 0.08);
+  top: -180px;
+  left: -180px;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: #00d4ff;
+  filter: blur(115px);
+  opacity: 0.2;
   pointer-events: none;
   z-index: 0;
-  animation: meshShift 20s ease-in-out infinite alternate;
+  animation: cornerGlow 12s ease-in-out infinite alternate;
 }
 
-@keyframes meshShift {
-  0% { opacity: 1; }
-  50% { opacity: 0.7; }
-  100% { opacity: 1; }
+.bg-gradient::after {
+  content: '';
+  position: fixed;
+  right: -180px;
+  bottom: -180px;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: #00d4ff;
+  filter: blur(115px);
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 0;
+  animation: cornerGlow 14s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes cornerGlow {
+  from { transform: scale(0.92); opacity: 0.14; }
+  to { transform: scale(1.08); opacity: 0.22; }
 }
 
 /* Page content sits above the gradient mesh */
@@ -259,13 +280,13 @@ main {
 .btn-outline-primary {
   background: transparent;
   border: 1px solid rgba(0, 212, 255, 0.3);
-  color: #14765a;
+  color: var(--accent-primary);
 }
 
 .btn-outline-primary:hover {
   background: rgba(0, 212, 255, 0.08);
-  border-color: #168f68;
-  color: #14765a;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
   box-shadow: var(--shadow-glow);
 }
 
@@ -338,9 +359,9 @@ main {
 .card-glass {
   border-radius: var(--radius-xl);
   background: var(--bg-card);
-  backdrop-filter: blur(18px) saturate(1.2);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
-  border: 1px solid rgba(18, 49, 43, 0.08);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: var(--shadow-md);
   color: var(--text-primary);
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-fast);
@@ -626,7 +647,7 @@ main {
 
 /* --- GRADIENT TEXT UTILITY --- */
 .text-gradient {
-  color: #14765a !important;
+  color: var(--accent-primary) !important;
 }
 
 /* --- TEXT COLOR OVERRIDES FOR DARK THEME --- */
@@ -782,7 +803,7 @@ hr {
 }
 
 .text-white {
-  color: var(--text-primary) !important;
+  color: #ffffff !important;
 }
 
 /* --- CUSTOM SCROLLBAR (Dark) --- */
@@ -856,7 +877,7 @@ hr {
   margin: 0 auto 1rem;
   background: rgba(0, 212, 255, 0.08);
   border: 1px solid rgba(0, 212, 255, 0.2);
-  color: #14765a;
+  color: var(--accent-primary);
 }
 
 .icon-header.icon-success {
