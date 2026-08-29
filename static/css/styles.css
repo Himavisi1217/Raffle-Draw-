@@ -102,11 +102,11 @@ a:hover {
   content: '';
   position: fixed;
   top: -180px;
-  left: -180px;
+  right: -180px;
   width: 520px;
   height: 520px;
   border-radius: 50%;
-  background: #00d4ff;
+  background: #5fe0a5;
   filter: blur(115px);
   opacity: 0.2;
   pointer-events: none;
@@ -117,12 +117,12 @@ a:hover {
 .bg-gradient::after {
   content: '';
   position: fixed;
-  right: -180px;
+  left: -180px;
   bottom: -180px;
   width: 520px;
   height: 520px;
   border-radius: 50%;
-  background: #00d4ff;
+  background: #5fe0a5;
   filter: blur(115px);
   opacity: 0.18;
   pointer-events: none;
