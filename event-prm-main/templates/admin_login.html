@@ -1,0 +1,51 @@
+{% extends "base.html" %} {% block title %}Admin Login{% endblock %} {% block
+content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5 col-md-7">
+    <div class="card card-glass shadow-lg border-0">
+      <div class="card-body p-4 p-md-5">
+        <h1 class="h4 fw-semibold mb-3 text-center">Admin Login</h1>
+        <p class="text-muted text-center mb-4">
+          Sign in to manage registrations and run the randomizer.
+        </p>
+
+        <form method="post" novalidate>
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input
+              type="email"
+              class="form-control form-control-modern"
+              id="email"
+              name="email"
+              required
+            />
+          </div>
+
+          <div class="mb-4">
+            <label for="password" class="form-label">Password</label>
+            <input
+              type="password"
+              class="form-control form-control-modern"
+              id="password"
+              name="password"
+              required
+            />
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 btn-modern mb-3">
+            Login
+          </button>
+
+          <p class="text-muted small text-center mb-0">
+            Need an admin account?
+            <a href="{{ url_for('admin_signup') }}" class="link-light"
+              >Sign up</a
+            >
+            using the secret code.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

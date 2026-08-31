@@ -1,0 +1,78 @@
+{% extends "base.html" %} {% block title %}Admin Sign Up{% endblock %} {% block
+content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5 col-md-7">
+    <div class="card card-glass shadow-lg border-0">
+      <div class="card-body p-4 p-md-5">
+        <h1 class="h4 fw-semibold mb-3 text-center">Admin Sign Up</h1>
+        <p class="text-muted text-center mb-4">
+          Create an admin account using the shared secret code.
+        </p>
+
+        <form method="post" novalidate>
+          <div class="mb-3">
+            <label for="email" class="form-label">Admin Email</label>
+            <input
+              type="email"
+              class="form-control form-control-modern"
+              id="email"
+              name="email"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input
+              type="password"
+              class="form-control form-control-modern"
+              id="password"
+              name="password"
+              required
+            />
+          </div>
+
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label"
+              >Confirm Password</label
+            >
+            <input
+              type="password"
+              class="form-control form-control-modern"
+              id="confirm_password"
+              name="confirm_password"
+              required
+            />
+          </div>
+
+          <div class="mb-4">
+            <label for="secret_code" class="form-label"
+              >Admin Secret Code</label
+            >
+            <input
+              type="password"
+              class="form-control form-control-modern"
+              id="secret_code"
+              name="secret_code"
+              required
+            />
+            <div class="form-text text-muted">
+              This code should only be shared with trusted organizers.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 btn-modern mb-3">
+            Create Admin Account
+          </button>
+
+          <p class="text-muted small text-center mb-0">
+            Already have an account?
+            <a href="{{ url_for('admin_login') }}" class="link-light">Log in</a
+            >.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

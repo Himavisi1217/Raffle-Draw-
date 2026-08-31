@@ -1,23 +1,15 @@
-{% extends "base.html" %} {% block title %}Register for {{ event.name }}{%
-endblock %} {% block content %}
-<div class="event-themed row justify-content-center" style="--event-accent: {{ event.accent_color or '#5FE0A5' }}">
+{% extends "base.html" %} {% block title %}Edit Participant{% endblock %} {%
+block content %}
+<div class="row justify-content-center">
   <div class="col-lg-6 col-md-8">
     <div class="card card-glass shadow-lg border-0">
       <div class="card-body p-4 p-md-5">
-        <div class="icon-header mb-3">
-          <i data-lucide="user-check" style="width:24px;height:24px"></i>
-        </div>
-        <h1 class="h3 fw-semibold mb-2 text-center">Event Registration</h1>
+        <h1 class="h4 fw-semibold mb-3 text-center">Edit Participant</h1>
         <p class="text-muted text-center mb-4">
-          Registering for: <br />
-          <strong class="text-gradient">{{ event.name }}</strong>
+          Update the details for {{ participant.name }}.
         </p>
 
-        <form
-          method="post"
-          action="{{ url_for('register', event_id=event_id) }}"
-          novalidate
-        >
+        <form method="post" novalidate>
           <div class="mb-3">
             <label for="name" class="form-label">Full Name</label>
             <input
@@ -25,7 +17,7 @@ endblock %} {% block content %}
               class="form-control form-control-modern"
               id="name"
               name="name"
-              placeholder="John Doe"
+              value="{{ participant.name }}"
               required
             />
           </div>
@@ -37,7 +29,7 @@ endblock %} {% block content %}
               class="form-control form-control-modern"
               id="mobile_number"
               name="mobile_number"
-              placeholder="+94 7X XXX XXXX"
+              value="{{ participant.mobile_number }}"
               required
             />
           </div>
@@ -49,7 +41,7 @@ endblock %} {% block content %}
               class="form-control form-control-modern"
               id="company_name"
               name="company_name"
-              placeholder="Acme Corp"
+              value="{{ participant.company_name }}"
               required
             />
           </div>
@@ -61,7 +53,7 @@ endblock %} {% block content %}
               class="form-control form-control-modern"
               id="position"
               name="position"
-              placeholder="Software Engineer"
+              value="{{ participant.position }}"
               required
             />
           </div>
@@ -73,29 +65,22 @@ endblock %} {% block content %}
               class="form-control form-control-modern"
               id="email"
               name="email"
-              placeholder="john@example.com"
+              value="{{ participant.email }}"
               required
             />
           </div>
 
-          <div class="form-check mb-4 consent-check">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="data_sharing_consent"
-              name="data_sharing_consent"
-              required
-            />
-            <label class="form-check-label small text-muted" for="data_sharing_consent">
-              I agree that my registration data may be shared with the publishers
-              for event-related communication and administration.
-            </label>
+          <div class="d-flex justify-content-between">
+            <a
+              href="{{ url_for('admin_dashboard') }}"
+              class="btn btn-outline-light btn-modern"
+            >
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary btn-modern">
+              Save Changes
+            </button>
           </div>
-
-          <button type="submit" class="btn btn-primary w-100 btn-modern">
-            <i data-lucide="send" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px"></i>
-            Submit Registration
-          </button>
         </form>
       </div>
     </div>

@@ -1,0 +1,355 @@
+{% extends "base.html" %} {% block title %}Manage Event: {{ event.name }}{%
+endblock %} {% block content %}
+<div class="row justify-content-center">
+  <div class="col-12">
+    <div
+      class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2"
+    >
+      <div>
+        <h1 class="h4 fw-semibold mb-1">{{ event.name }}</h1>
+        <p class="text-muted mb-0">
+          Manage participants for this specific event.
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <a
+          href="{{ url_for('admin_dashboard') }}"
+          class="btn btn-outline-dark btn-modern btn-sm"
+        >
+          &larr; Back to Events
+        </a>
+        <button
+          class="btn btn-primary btn-modern btn-sm"
+          data-bs-toggle="modal"
+          data-bs-target="#addParticipantModal"
+        >
+          + Add Participant
+        </button>
+        <button
+          class="btn btn-success btn-modern btn-sm"
+          data-bs-toggle="modal"
+          data-bs-target="#qrCodeModal"
+        >
+          Show QR Code
+        </button>
+        <a
+          href="{{ url_for('wheel', event_id=event.id) }}"
+          class="btn btn-primary btn-modern btn-sm"
+        >
+          Open Randomizer
+        </a>
+        <form
+          method="post"
+          action="{{ url_for('end_event', event_id=event.id) }}"
+          onsubmit="
+            return confirm(
+              'WARNING: This will END the event and PERMANENTLY WIPE OUT all its associated data (participants, etc.). Are you absolutely sure?',
+            );
+          "
+          class="d-inline"
+        >
+          <button type="submit" class="btn btn-danger btn-modern btn-sm ms-2">
+            End Event (Wipe Data)
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card card-glass shadow-lg border-0 mb-4">
+      <div class="card-body p-3 p-md-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h6 fw-semibold mb-0">Registered Participants</h2>
+          <span class="badge bg-secondary-soft text-secondary">
+            Total: {{ participants|length }}
+          </span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Company</th>
+                <th scope="col">Position</th>
+                <th scope="col">Mobile</th>
+                <th scope="col">Email</th>
+                <th scope="col" class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if participants %} {% for p in participants %}
+              <tr>
+                <td>{{ p.name }}</td>
+                <td>{{ p.company_name }}</td>
+                <td>{{ p.position }}</td>
+                <td>{{ p.mobile_number }}</td>
+                <td>{{ p.email }}</td>
+                <td class="text-end">
+                  <a
+                    href="{{ url_for('edit_participant', event_id=event.id, participant_id=p.id) }}"
+                    class="btn btn-outline-dark btn-sm btn-modern me-1"
+                  >
+                    Edit
+                  </a>
+                  <form
+                    method="post"
+                    action="{{ url_for('delete_participant', event_id=event.id, participant_id=p.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Delete this participant?');"
+                  >
+                    <button
+                      type="submit"
+                      class="btn btn-outline-danger btn-sm btn-modern"
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %} {% else %}
+              <tr>
+                <td colspan="6" class="text-center text-muted py-5">
+                  No participants have registered for this event yet.
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QR Code Modal -->
+<div
+  class="modal fade"
+  id="qrCodeModal"
+  tabindex="-1"
+  aria-labelledby="qrCodeModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content card-glass border-0 text-center">
+      <div class="modal-header border-bottom-0 pb-0 justify-content-center">
+        <h5 class="modal-title fw-semibold" id="qrCodeModalLabel">
+          Scan to Register
+        </h5>
+        <button
+          type="button"
+          class="btn-close ms-auto"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+          style="position: absolute; right: 15px"
+        ></button>
+      </div>
+      <div class="modal-body pb-4 pt-2">
+        <p class="text-muted small mb-3">
+          Guests can scan this to join <strong>{{ event.name }}</strong>
+        </p>
+        <img
+          id="qrImage"
+          src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ url_for('register', event_id=event.id, _external=True) }}"
+          alt="QR Code"
+          class="img-fluid rounded shadow-sm border mb-3"
+        />
+        <div class="d-grid gap-2">
+          <button onclick="downloadQR()" class="btn btn-outline-primary btn-sm btn-modern">
+            Download QR Code
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Participant Modal -->
+<div
+  class="modal fade"
+  id="addParticipantModal"
+  tabindex="-1"
+  aria-labelledby="addParticipantModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content card-glass border-0">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h5 class="modal-title fw-semibold" id="addParticipantModalLabel">
+          Manually Add Participant
+        </h5>
+        <button
+          type="button"
+          class="btn-close ms-auto"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <form
+        method="post"
+        action="{{ url_for('admin_event_detail', event_id=event.id) }}"
+      >
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="name" class="form-label text-muted small"
+              >Full Name</label
+            >
+            <input
+              type="text"
+              class="form-control form-control-modern"
+              id="name"
+              name="name"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="mobile_number" class="form-label text-muted small"
+              >Mobile Number</label
+            >
+            <input
+              type="tel"
+              class="form-control form-control-modern"
+              id="mobile_number"
+              name="mobile_number"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="company_name" class="form-label text-muted small"
+              >Company Name</label
+            >
+            <input
+              type="text"
+              class="form-control form-control-modern"
+              id="company_name"
+              name="company_name"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="position" class="form-label text-muted small"
+              >Position</label
+            >
+            <input
+              type="text"
+              class="form-control form-control-modern"
+              id="position"
+              name="position"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="email" class="form-label text-muted small"
+              >Email Address</label
+            >
+            <input
+              type="email"
+              class="form-control form-control-modern"
+              id="email"
+              name="email"
+              required
+            />
+          </div>
+        </div>
+        <div class="modal-footer border-top-0 pt-0">
+          <button
+            type="button"
+            class="btn btn-outline-dark btn-modern"
+            data-bs-dismiss="modal"
+          >
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary btn-modern">
+            Add Participant
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Script to update the participant list in real-time
+  const EVENT_ID = "{{ event.id }}";
+  const FETCH_URL = `/api/participants/${EVENT_ID}`;
+  const tableBody = document.querySelector("tbody");
+  const totalBadge = document.querySelector(".badge.bg-secondary-soft");
+
+  async function refreshParticipants() {
+    // Only refresh if the "Add Participant" modal is NOT open to avoid focus issues
+    const modalElement = document.getElementById("addParticipantModal");
+    if (modalElement && modalElement.classList.contains("show")) return;
+
+    try {
+      const response = await fetch(FETCH_URL);
+      const participants = await response.json();
+
+      // Update the "Total Count" badge
+      if (totalBadge) totalBadge.textContent = `Total: ${participants.length}`;
+
+      if (participants.length === 0) {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              No participants have registered for this event yet.
+            </td>
+          </tr>`;
+        return;
+      }
+
+      // Render new table rows
+      let rowsHtml = "";
+      participants.forEach((p) => {
+        // Construct the Edit URL (can be hardcoded with IDs)
+        const editUrl = `/admin/events/${EVENT_ID}/participants/${p.id}/edit`;
+        const deleteUrl = `/admin/events/${EVENT_ID}/participants/${p.id}/delete`;
+
+        rowsHtml += `
+          <tr>
+            <td>${p.name}</td>
+            <td>${p.company_name}</td>
+            <td>${p.position}</td>
+            <td>${p.mobile_number}</td>
+            <td>${p.email}</td>
+            <td class="text-end">
+              <a href="${editUrl}" class="btn btn-outline-dark btn-sm btn-modern me-1">Edit</a>
+              <form method="post" action="${deleteUrl}" class="d-inline" onsubmit="return confirm('Delete this participant?');">
+                <button type="submit" class="btn btn-outline-danger btn-sm btn-modern">Delete</button>
+              </form>
+            </td>
+          </tr>`;
+      });
+      tableBody.innerHTML = rowsHtml;
+    } catch (e) {
+      console.error("Error refreshing participants:", e);
+    }
+  }
+
+  // Poll every 5 seconds
+  setInterval(refreshParticipants, 5000);
+
+  // Download QR Code Function
+  async function downloadQR() {
+    const qrImg = document.getElementById('qrImage');
+    const qrUrl = qrImg.src;
+    const eventName = "{{ event.name }}".replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    
+    try {
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `qr_register_${eventName}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(qrUrl, '_blank');
+    }
+  }
+</script>
+{% endblock %}

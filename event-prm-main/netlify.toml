@@ -1,0 +1,12 @@
+[build]
+  command = "mkdir -p public && pip install -r requirements.txt"
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+  included_files = ["templates/**", "static/**", "app.py"]
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/handler"
+  status = 200

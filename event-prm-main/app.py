@@ -2,8 +2,6 @@ import os
 import random
 import datetime
 import uuid
-import csv
-import io
 from functools import wraps
 from urllib.parse import urlparse
 
@@ -18,7 +16,6 @@ from flask import (
     flash,
     jsonify,
     session,
-    send_file,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -44,26 +41,6 @@ FIREBASE_RTDB_URL = os.getenv(
 )
 FIREBASE_SECRET = os.getenv("FIREBASE_SECRET", "VvlSfG6dBnaj6KFZPSVkoARQ4MoPiITBqaP5N8Zc")
 
-_ORIGINAL_REQUESTS = {
-    name: getattr(requests, name)
-    for name in ("get", "post", "put", "patch", "delete")
-}
-
-
-def _firebase_request(method_name, url, *args, **kwargs):
-    """Use the original requests methods with a safer Firebase SSL fallback."""
-    method = _ORIGINAL_REQUESTS[method_name]
-    kwargs.setdefault("timeout", 20)
-    try:
-        return method(url, *args, **kwargs)
-    except requests.exceptions.SSLError:
-        kwargs["verify"] = False
-        return method(url, *args, **kwargs)
-
-
-for _method_name in ("get", "post", "put", "patch", "delete"):
-    setattr(requests, _method_name, lambda url, *args, method_name=_method_name, **kwargs: _firebase_request(method_name, url, *args, **kwargs))
-
 # --- HELPERS ---
 def get_firebase_url(path):
     """
@@ -73,29 +50,6 @@ def get_firebase_url(path):
     if not path.startswith("/"):
         path = "/" + path
     return f"{FIREBASE_RTDB_URL}{path}.json?auth={FIREBASE_SECRET}"
-
-
-def normalize_mobile_number(value):
-    """Normalize phone numbers for duplicate checks while preserving the entered format."""
-    return "".join(character for character in value if character.isdigit())
-
-
-def find_duplicate_participant(participants, email, mobile_number, exclude_id=None):
-    """Return the duplicate field name for an event participant, if one exists."""
-    normalized_email = email.strip().lower()
-    normalized_mobile = normalize_mobile_number(mobile_number)
-
-    if not isinstance(participants, dict):
-        return None
-
-    for participant_id, participant in participants.items():
-        if participant_id == exclude_id or not isinstance(participant, dict):
-            continue
-        if participant.get("email", "").strip().lower() == normalized_email:
-            return "email"
-        if normalize_mobile_number(participant.get("mobile_number", "")) == normalized_mobile:
-            return "mobile number"
-    return None
 
 
 def login_required(view_func):
@@ -144,29 +98,21 @@ def register(event_id):
         company_name = request.form.get("company_name", "").strip()
         position = request.form.get("position", "").strip()
         email = request.form.get("email", "").strip().lower()
-        data_sharing_consent = request.form.get("data_sharing_consent") == "on"
 
         # Basic validation
         if not all([name, mobile_number, company_name, position, email]):
             flash("Please fill in all fields.", "danger")
             return redirect(url_for("register", event_id=event_id))
-        if not data_sharing_consent:
-            flash("Please confirm that you would like to share your data with the publishers.", "warning")
-            return redirect(url_for("register", event_id=event_id))
 
-        # Check for duplicate contact details in this specific event.
+        # Check for duplicate email in this specific event to prevent double registration
         url = get_firebase_url(f"/participants/{event_id}")
         resp = requests.get(url)
         all_participants = resp.json() if resp.status_code == 200 else {}
-        duplicate_field = find_duplicate_participant(
-            all_participants, email, mobile_number
-        )
-        if duplicate_field:
-            flash(
-                f"This {duplicate_field} is already registered for this event.",
-                "warning",
-            )
-            return redirect(url_for("register", event_id=event_id))
+        if isinstance(all_participants, dict):
+            for pid, pdata in all_participants.items():
+                if pdata.get("email") == email:
+                    flash("This email is already registered for this event.", "warning")
+                    return redirect(url_for("register_success", event_id=event_id))
 
         # Prepare participant data object
         participant_data = {
@@ -175,8 +121,6 @@ def register(event_id):
             "company_name": company_name,
             "position": position,
             "email": email,
-            "data_sharing_consent": True,
-            "data_sharing_consent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         
@@ -202,38 +146,10 @@ def wheel(event_id):
     The main interactive spinning wheel page.
     Requires admin login.
     """
-    presentation_mode = request.args.get("presentation") == "1"
     event_url = get_firebase_url(f"/events/{event_id}")
     resp = requests.get(event_url)
     event_data = resp.json() or {}
-    prize_resp = requests.get(get_firebase_url(f"/prizes/{event_id}"))
-    prize_data = prize_resp.json() if prize_resp.status_code == 200 else {}
-    participant_resp = requests.get(get_firebase_url(f"/participants/{event_id}"))
-    participant_data = participant_resp.json() if participant_resp.status_code == 200 else {}
-    initial_prizes = []
-    initial_participants = []
-    if isinstance(prize_data, dict):
-        for prize_id, prize in prize_data.items():
-            if isinstance(prize, dict):
-                prize = dict(prize)
-                prize["id"] = prize_id
-                initial_prizes.append(prize)
-    if isinstance(participant_data, dict):
-        for participant_id, participant in participant_data.items():
-            if isinstance(participant, dict):
-                participant = dict(participant)
-                participant["id"] = participant_id
-                initial_participants.append(participant)
-    initial_prizes.sort(key=lambda item: item.get("created_at", ""))
-    initial_participants.sort(key=lambda item: item.get("created_at", ""))
-    return render_template(
-        "wheel.html",
-        event_id=event_id,
-        event=event_data,
-        initial_prizes=initial_prizes,
-        initial_participants=initial_participants,
-        presentation_mode=presentation_mode,
-    )
+    return render_template("wheel.html", event_id=event_id, event=event_data)
 
 
 @app.route("/api/participants/<event_id>")
@@ -257,31 +173,6 @@ def api_participants(event_id):
     # Sort by registration time
     participants.sort(key=lambda x: x.get("created_at", ""))
     return jsonify(participants)
-
-
-@app.route("/api/prizes/<event_id>")
-@login_required
-def api_prizes(event_id):
-    """
-    API endpoint that returns a list of prizes for a given event.
-    Used by the wheel.js to populate the wheel segments.
-    """
-    url = get_firebase_url(f"/prizes/{event_id}")
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return jsonify({"error": "Unable to load prizes."}), 502
-    data = resp.json() or {}
-    
-    prizes = []
-    if isinstance(data, dict):
-        for pid, pdata in data.items():
-            if isinstance(pdata, dict):
-                pdata = dict(pdata)
-                pdata["id"] = pid
-                prizes.append(pdata)
-            
-    prizes.sort(key=lambda x: x.get("created_at", ""))
-    return jsonify(prizes)
 
 
 @app.route("/api/random-winners/<event_id>")
@@ -325,20 +216,9 @@ def admin_dashboard():
     if request.method == "POST":
         event_name = request.form.get("event_name", "").strip()
         if event_name:
-            portal_title = request.form.get("portal_title", event_name).strip() or event_name
-            banner_title = request.form.get("banner_title", event_name).strip() or event_name
-            banner_subtitle = request.form.get("banner_subtitle", "").strip()
-            banner_message = request.form.get("banner_message", "").strip()
-            accent_color = request.form.get("accent_color", "#5FE0A5").strip() or "#5FE0A5"
-
             # Create Event Data
             event_data = {
                 "name": event_name,
-                "portal_title": portal_title,
-                "banner_title": banner_title,
-                "banner_subtitle": banner_subtitle,
-                "banner_message": banner_message,
-                "accent_color": accent_color,
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "admin_id": session.get("admin_id")
             }
@@ -372,32 +252,6 @@ def admin_event_detail(event_id):
     Admins can also manually add participants here.
     """
     if request.method == "POST":
-        form_type = request.form.get("form_type")
-
-        if form_type == "event_settings":
-            title = request.form.get("portal_title", "").strip() or request.form.get("event_name", "").strip()
-            subtitle = request.form.get("banner_subtitle", "").strip()
-            banner_title = request.form.get("banner_title", "").strip()
-            banner_message = request.form.get("banner_message", "").strip()
-            accent_color = request.form.get("accent_color", "#5FE0A5").strip()
-
-            if not title:
-                flash("Event title is required.", "danger")
-                return redirect(url_for("admin_event_detail", event_id=event_id))
-
-            event_payload = {
-                "name": title,
-                "portal_title": title,
-                "banner_title": banner_title or title,
-                "banner_subtitle": subtitle,
-                "banner_message": banner_message,
-                "accent_color": accent_color,
-                "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-            }
-            requests.patch(get_firebase_url(f"/events/{event_id}"), json=event_payload)
-            flash("Event branding and title updated successfully.", "success")
-            return redirect(url_for("admin_event_detail", event_id=event_id))
-
         # Form for manual participant registration by admin
         name = request.form.get("name", "").strip()
         mobile_number = request.form.get("mobile_number", "").strip()
@@ -409,19 +263,15 @@ def admin_event_detail(event_id):
             flash("Please fill in all fields.", "danger")
             return redirect(url_for("admin_event_detail", event_id=event_id))
 
-        # Check for duplicate contact details.
+        # Check for duplicate
         url = get_firebase_url(f"/participants/{event_id}")
         resp = requests.get(url)
         all_participants = resp.json() if resp.status_code == 200 else {}
-        duplicate_field = find_duplicate_participant(
-            all_participants, email, mobile_number
-        )
-        if duplicate_field:
-            flash(
-                f"This {duplicate_field} is already registered for this event.",
-                "warning",
-            )
-            return redirect(url_for("admin_event_detail", event_id=event_id))
+        if isinstance(all_participants, dict):
+            for pid, pdata in all_participants.items():
+                if pdata.get("email") == email:
+                    flash("This email is already registered for this event.", "warning")
+                    return redirect(url_for("admin_event_detail", event_id=event_id))
 
         participant_data = {
             "name": name,
@@ -457,20 +307,7 @@ def admin_event_detail(event_id):
             participants.append(pdata)
             
     participants.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-
-    url = get_firebase_url(f"/prizes/{event_id}")
-    resp = requests.get(url)
-    data = resp.json() or {}
-    
-    prizes = []
-    if isinstance(data, dict):
-        for pid, pdata in data.items():
-            pdata["id"] = pid
-            prizes.append(pdata)
-            
-    prizes.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-
-    return render_template("event_detail.html", participants=participants, prizes=prizes, event=event_data)
+    return render_template("event_detail.html", participants=participants, event=event_data)
 
 
 @app.route("/admin/events/<event_id>/end", methods=["POST"])
@@ -482,8 +319,6 @@ def end_event(event_id):
     """
     # Wipe the participants for this event
     requests.delete(get_firebase_url(f"/participants/{event_id}"))
-    # Wipe the prizes for this event
-    requests.delete(get_firebase_url(f"/prizes/{event_id}"))
     # Wipe the entry from the events list
     requests.delete(get_firebase_url(f"/events/{event_id}"))
     flash("Event and all its participants have been completely wiped and removed.", "success")
@@ -497,77 +332,6 @@ def delete_participant(event_id, participant_id):
     url = get_firebase_url(f"/participants/{event_id}/{participant_id}")
     requests.delete(url)
     flash("Participant deleted.", "success")
-    return redirect(url_for("admin_event_detail", event_id=event_id))
-
-
-@app.route("/admin/events/<event_id>/participants/export")
-@login_required
-def export_participants(event_id):
-    """Download all event participants as an Excel-compatible CSV file."""
-    event_resp = requests.get(get_firebase_url(f"/events/{event_id}"))
-    event_data = event_resp.json() if event_resp.status_code == 200 else {}
-    if not event_data:
-        flash("Event not found.", "danger")
-        return redirect(url_for("admin_dashboard"))
-
-    participants_resp = requests.get(get_firebase_url(f"/participants/{event_id}"))
-    participants_data = participants_resp.json() if participants_resp.status_code == 200 else {}
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Name", "Mobile Number", "Company", "Position", "Email", "Data Sharing Consent", "Registered At"])
-    if isinstance(participants_data, dict):
-        for participant in participants_data.values():
-            if isinstance(participant, dict):
-                writer.writerow([
-                    participant.get("name", ""),
-                    participant.get("mobile_number", ""),
-                    participant.get("company_name", ""),
-                    participant.get("position", ""),
-                    participant.get("email", ""),
-                    "Yes" if participant.get("data_sharing_consent") else "No",
-                    participant.get("created_at", ""),
-                ])
-
-    filename = f"{event_data.get('name', 'event').strip() or 'event'}_participants.csv"
-    return send_file(
-        io.BytesIO(output.getvalue().encode("utf-8-sig")),
-        mimetype="text/csv",
-        as_attachment=True,
-        download_name=filename,
-    )
-
-
-@app.route("/admin/events/<event_id>/prizes/add", methods=["POST"])
-@login_required
-def add_prize(event_id):
-    """Manually adds a prize to an event."""
-    name = request.form.get("name", "").strip()
-    if not name:
-        flash("Prize name is required.", "danger")
-        return redirect(url_for("admin_event_detail", event_id=event_id))
-
-    prize_data = {
-        "name": name,
-        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-    }
-    
-    post_url = get_firebase_url(f"/prizes/{event_id}")
-    response = requests.post(post_url, json=prize_data)
-    if response.status_code not in (200, 201):
-        flash("Prize could not be saved. Please try again.", "danger")
-        return redirect(url_for("admin_event_detail", event_id=event_id))
-    flash("Prize added manually.", "success")
-    return redirect(url_for("admin_event_detail", event_id=event_id))
-
-
-@app.route("/admin/events/<event_id>/prizes/<prize_id>/delete", methods=["POST"])
-@login_required
-def delete_prize(event_id, prize_id):
-    """Deletes a single prize from an event."""
-    url = get_firebase_url(f"/prizes/{event_id}/{prize_id}")
-    requests.delete(url)
-    flash("Prize deleted.", "success")
     return redirect(url_for("admin_event_detail", event_id=event_id))
 
 
@@ -601,30 +365,6 @@ def edit_participant(event_id, participant_id):
         ]):
             flash("All fields are required.", "danger")
             return redirect(url_for("edit_participant", event_id=event_id, participant_id=participant_id))
-
-        participants_url = get_firebase_url(f"/participants/{event_id}")
-        participants_resp = requests.get(participants_url)
-        all_participants = (
-            participants_resp.json() if participants_resp.status_code == 200 else {}
-        )
-        duplicate_field = find_duplicate_participant(
-            all_participants,
-            participant["email"],
-            participant["mobile_number"],
-            exclude_id=participant_id,
-        )
-        if duplicate_field:
-            flash(
-                f"This {duplicate_field} is already registered for this event.",
-                "warning",
-            )
-            return redirect(
-                url_for(
-                    "edit_participant",
-                    event_id=event_id,
-                    participant_id=participant_id,
-                )
-            )
 
         # Update record in Firebase
         put_url = get_firebase_url(f"/participants/{event_id}/{participant_id}")

@@ -51,6 +51,15 @@ endblock %} {% block content %}
           Open Raffle Draw
         </a>
         <a
+          href="{{ url_for('register', event_id=event.id) }}"
+          class="btn btn-outline-primary btn-modern btn-sm"
+          target="_blank"
+          rel="noopener"
+        >
+          <i data-lucide="external-link" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          View Registration Form
+        </a>
+        <a
           href="{{ url_for('export_participants', event_id=event.id) }}"
           class="btn btn-outline-primary btn-modern btn-sm"
         >

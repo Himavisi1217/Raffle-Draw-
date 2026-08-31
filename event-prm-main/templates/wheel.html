@@ -1,0 +1,132 @@
+{% extends "base.html" %} {% block title %}Randomizer: {{ event.name }}{%
+endblock %} {% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-8">
+    <div class="card card-glass shadow-lg border-0">
+      <div class="card-body p-4 p-md-5">
+        <div
+          class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3"
+        >
+          <div>
+            <h1 class="h3 fw-semibold mb-1">
+              Randomizer: <span class="text-primary">{{ event.name }}</span>
+            </h1>
+            <p class="text-muted mb-0">
+              Fairly selects unique participants one at a time.
+            </p>
+          </div>
+          <div class="text-md-end">
+            <a
+              href="{{ url_for('admin_event_detail', event_id=event_id) }}"
+              class="btn btn-outline-dark btn-sm mb-2 d-block"
+            >
+              &larr; Back to Event
+            </a>
+            <span
+              class="badge bg-secondary-soft text-secondary"
+              id="participantCountBadge"
+            >
+              Loading participants...
+            </span>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div
+            class="col-md-6 d-flex flex-column align-items-center position-relative"
+          >
+            <div class="wheel-container mb-4">
+              <canvas id="wheelCanvas" width="320" height="320"></canvas>
+              <div class="wheel-center">
+                <span id="wheelSelectedName">Ready</span>
+              </div>
+              <div class="wheel-indicator"></div>
+            </div>
+
+            <div
+              class="d-flex align-items-center gap-2 mb-2 w-100 justify-content-center"
+            >
+              <label
+                for="numWinners"
+                class="form-label text-muted small mb-0 w-auto"
+                >Winners to pick:</label
+              >
+              <input
+                type="number"
+                id="numWinners"
+                class="form-control form-control-modern text-center"
+                value="1"
+                min="1"
+                max="50"
+                style="width: 70px"
+              />
+            </div>
+
+            <button
+              id="spinButton"
+              class="btn btn-primary btn-modern px-4 w-75 py-2 fw-bold shadow-sm"
+              disabled
+            >
+              Spin & Pick
+            </button>
+            <p class="small text-muted mt-2 text-center">
+              Picks randomly drawing one at a time to build excitement.
+            </p>
+          </div>
+
+          <div class="col-md-6">
+            <div class="glass-winner-card p-3 p-md-4 h-100 d-flex flex-column">
+              <div
+                class="d-flex justify-content-between align-items-center mb-3"
+              >
+                <div>
+                  <div class="winner-title" style="color: #475569">Winners</div>
+                  <div class="winner-main fw-semibold">Current Selected</div>
+                </div>
+                <span
+                  class="badge bg-secondary-soft text-secondary"
+                  id="winnerCountBadge"
+                >
+                  0 selected
+                </span>
+              </div>
+
+              <ul
+                class="list-group list-group-flush small flex-grow-1"
+                id="winnersList"
+                style="overflow-y: auto; max-height: 230px"
+              ></ul>
+
+              <div
+                class="mt-4 pt-3 border-top"
+                style="border-color: rgba(226, 232, 240, 0.8) !important"
+              >
+                <div class="d-flex gap-2">
+                  <button
+                    id="drawServerButton"
+                    class="btn btn-outline-secondary btn-sm flex-grow-1 disabled"
+                    style="display: none"
+                  >
+                    Use Server-Side
+                  </button>
+                  <button
+                    id="clearButton"
+                    class="btn btn-outline-danger btn-sm w-100 fw-medium"
+                  >
+                    Clear Winners List
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  window.CURRENT_EVENT_ID = "{{ event_id }}";
+</script>
+<script src="{{ url_for('static', filename='js/wheel.js') }}"></script>
+{% endblock %}
