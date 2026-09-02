@@ -80,10 +80,16 @@ def normalize_mobile_number(value):
     return "".join(character for character in value if character.isdigit())
 
 
-def find_duplicate_participant(participants, email, mobile_number, exclude_id=None):
+def normalize_name(value):
+    """Normalize a participant name for duplicate detection."""
+    return (value or "").strip().casefold()
+
+
+def find_duplicate_participant(participants, email, mobile_number, name=None, exclude_id=None):
     """Return the duplicate field name for an event participant, if one exists."""
-    normalized_email = email.strip().lower()
-    normalized_mobile = normalize_mobile_number(mobile_number)
+    normalized_email = (email or "").strip().lower()
+    normalized_mobile = normalize_mobile_number(mobile_number or "")
+    normalized_name = normalize_name(name)
 
     if not isinstance(participants, dict):
         return None
@@ -91,9 +97,18 @@ def find_duplicate_participant(participants, email, mobile_number, exclude_id=No
     for participant_id, participant in participants.items():
         if participant_id == exclude_id or not isinstance(participant, dict):
             continue
-        if participant.get("email", "").strip().lower() == normalized_email:
+
+        existing_name = normalize_name(participant.get("name", ""))
+        existing_email = (participant.get("email", "") or "").strip().lower()
+        existing_mobile = normalize_mobile_number(participant.get("mobile_number", "") or "")
+
+        if normalized_name and existing_name and normalized_email and existing_name == normalized_name and existing_email == normalized_email:
+            return "name and email"
+        if normalized_name and existing_name and normalized_mobile and existing_name == normalized_name and existing_mobile == normalized_mobile:
+            return "name and mobile number"
+        if normalized_email and existing_email == normalized_email:
             return "email"
-        if normalize_mobile_number(participant.get("mobile_number", "")) == normalized_mobile:
+        if normalized_mobile and existing_mobile == normalized_mobile:
             return "mobile number"
     return None
 
@@ -113,6 +128,101 @@ def login_required(view_func):
     return wrapped_view
 
 
+def default_registration_fields():
+    """Return the default registration form configuration."""
+    return [
+        {
+            "key": "name",
+            "label": "Full Name",
+            "type": "text",
+            "required": True,
+            "placeholder": "John Doe",
+            "order": 1,
+        },
+        {
+            "key": "mobile_number",
+            "label": "Mobile Number",
+            "type": "tel",
+            "required": True,
+            "placeholder": "+94 7X XXX XXXX",
+            "order": 2,
+        },
+        {
+            "key": "company_name",
+            "label": "Company Name",
+            "type": "text",
+            "required": True,
+            "placeholder": "Acme Corp",
+            "order": 3,
+        },
+        {
+            "key": "position",
+            "label": "Position",
+            "type": "text",
+            "required": True,
+            "placeholder": "Software Engineer",
+            "order": 4,
+        },
+        {
+            "key": "email",
+            "label": "Email",
+            "type": "email",
+            "required": True,
+            "placeholder": "john@example.com",
+            "order": 5,
+        },
+        {
+            "key": "data_sharing_consent",
+            "label": "I agree that my registration data may be shared with the publishers for event-related communication and administration.",
+            "type": "checkbox",
+            "required": True,
+            "placeholder": "",
+            "order": 6,
+        },
+    ]
+
+
+def normalize_registration_fields(fields):
+    """Normalize and sort field definitions into a consistent structure."""
+    if not isinstance(fields, list):
+        fields = default_registration_fields()
+    normalized = []
+    for index, field in enumerate(fields):
+        if not isinstance(field, dict):
+            continue
+        key = (field.get("key") or field.get("name") or f"field_{index + 1}").strip()
+        if not key:
+            continue
+        normalized.append({
+            "key": key,
+            "label": (field.get("label") or field.get("name") or key.replace("_", " ")).strip() or key,
+            "type": field.get("type") or "text",
+            "required": bool(field.get("required", False)),
+            "placeholder": field.get("placeholder") or "",
+            "order": int(field.get("order") or (index + 1)),
+        })
+    normalized.sort(key=lambda item: item.get("order", 999))
+    for i, field in enumerate(normalized):
+        field["order"] = i + 1
+    return normalized
+
+
+def get_event_registration_fields(event_data):
+    """Return the registration field configuration for an event."""
+    if not isinstance(event_data, dict):
+        return default_registration_fields()
+    return normalize_registration_fields(event_data.get("registration_fields") or default_registration_fields())
+
+
+def get_event_winners(event_id):
+    """Fetch the saved winner assignment map for an event."""
+    resp = requests.get(get_firebase_url(f"/winners/{event_id}"))
+    data = resp.json() if resp.status_code == 200 else {}
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
 # --- ROUTES ---
 
 @app.route("/")
@@ -128,7 +238,6 @@ def register(event_id):
     GET: Display the registration form.
     POST: Save participant details to Firebase if valid.
     """
-    # Verify the event exists before showing the form
     event_url = get_firebase_url(f"/events/{event_id}")
     resp = requests.get(event_url)
     if resp.status_code != 200 or not resp.json():
@@ -136,57 +245,74 @@ def register(event_id):
         return redirect(url_for("index"))
 
     event_data = resp.json()
-    
+    registration_fields = get_event_registration_fields(event_data)
+
     if request.method == "POST":
-        # Extract form data
-        name = request.form.get("name", "").strip()
-        mobile_number = request.form.get("mobile_number", "").strip()
-        company_name = request.form.get("company_name", "").strip()
-        position = request.form.get("position", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        data_sharing_consent = request.form.get("data_sharing_consent") == "on"
-
-        # Basic validation
-        if not all([name, mobile_number, company_name, position, email]):
-            flash("Please fill in all fields.", "danger")
-            return redirect(url_for("register", event_id=event_id))
-        if not data_sharing_consent:
-            flash("Please confirm that you would like to share your data with the publishers.", "warning")
-            return redirect(url_for("register", event_id=event_id))
-
-        # Check for duplicate contact details in this specific event.
-        url = get_firebase_url(f"/participants/{event_id}")
-        resp = requests.get(url)
-        all_participants = resp.json() if resp.status_code == 200 else {}
-        duplicate_field = find_duplicate_participant(
-            all_participants, email, mobile_number
-        )
-        if duplicate_field:
-            flash(
-                f"This {duplicate_field} is already registered for this event.",
-                "warning",
-            )
-            return redirect(url_for("register", event_id=event_id))
-
-        # Prepare participant data object
         participant_data = {
-            "name": name,
-            "mobile_number": mobile_number,
-            "company_name": company_name,
-            "position": position,
-            "email": email,
-            "data_sharing_consent": True,
-            "data_sharing_consent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "data_sharing_consent": False,
         }
-        
-        # Save to Firebase
+        email_value = ""
+        mobile_value = ""
+
+        for field in registration_fields:
+            key = field["key"]
+            value = request.form.get(key, "")
+            if field["type"] == "checkbox":
+                form_value = value == "on"
+                participant_data[key] = form_value
+                if field["required"] and not form_value:
+                    flash("Please confirm the required consent field before continuing.", "warning")
+                    return redirect(url_for("register", event_id=event_id))
+                continue
+            if field["type"] == "email":
+                email_value = value.strip().lower()
+            if field["key"] == "mobile_number":
+                mobile_value = value.strip()
+            if key:
+                participant_data[key] = value.strip()
+
+        required_missing = False
+        for field in registration_fields:
+            if not field.get("required"):
+                continue
+            if field["type"] == "checkbox":
+                if not participant_data.get(field["key"], False):
+                    required_missing = True
+                continue
+            if not str(participant_data.get(field["key"], "")).strip():
+                required_missing = True
+
+        if required_missing:
+            flash("Please fill in all required fields.", "danger")
+            return redirect(url_for("register", event_id=event_id))
+
+        if email_value and mobile_value:
+            url = get_firebase_url(f"/participants/{event_id}")
+            resp = requests.get(url)
+            all_participants = resp.json() if resp.status_code == 200 else {}
+            duplicate_field = find_duplicate_participant(
+                all_participants,
+                email_value,
+                mobile_value,
+                participant_data.get("name") or participant_data.get("full_name") or "",
+            )
+            if duplicate_field:
+                flash(
+                    f"This {duplicate_field} is already registered for this event.",
+                    "warning",
+                )
+                return redirect(url_for("register", event_id=event_id))
+
+        participant_data["name"] = participant_data.get("name") or participant_data.get("full_name") or ""
+        participant_data["data_sharing_consent"] = bool(participant_data.get("data_sharing_consent", False))
+        participant_data["data_sharing_consent_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
         post_url = get_firebase_url(f"/participants/{event_id}")
         requests.post(post_url, json=participant_data)
-
         return redirect(url_for("register_success", event_id=event_id))
 
-    return render_template("register.html", event=event_data, event_id=event_id)
+    return render_template("register.html", event=event_data, event_id=event_id, registration_fields=registration_fields)
 
 
 @app.route("/success/<event_id>")
@@ -224,7 +350,7 @@ def wheel(event_id):
                 participant = dict(participant)
                 participant["id"] = participant_id
                 initial_participants.append(participant)
-    initial_prizes.sort(key=lambda item: item.get("created_at", ""))
+    initial_prizes.sort(key=lambda item: (int(item.get("sort_order") or 0), item.get("created_at", "")))
     initial_participants.sort(key=lambda item: item.get("created_at", ""))
     return render_template(
         "wheel.html",
@@ -234,6 +360,48 @@ def wheel(event_id):
         initial_participants=initial_participants,
         presentation_mode=presentation_mode,
     )
+
+
+@app.route("/api/winners/<event_id>", methods=["GET", "POST", "DELETE"])
+@login_required
+def api_winners(event_id):
+    """Store and retrieve prize to winner assignments for an event."""
+    winners_url = get_firebase_url(f"/winners/{event_id}")
+    if request.method == "GET":
+        winners = get_event_winners(event_id)
+        return jsonify(winners)
+
+    if request.method == "DELETE":
+        requests.delete(winners_url)
+        return jsonify({"status": "cleared"})
+
+    payload = request.get_json(silent=True) or {}
+    prize_id = str(payload.get("prize_id") or "").strip()
+    winner_id = str(payload.get("winner_id") or "").strip()
+    prize_name = (payload.get("prize_name") or "Prize").strip()
+    winner_name = (payload.get("winner_name") or "Winner").strip()
+
+    if not prize_id or not winner_id:
+        return jsonify({"error": "Prize and winner are required."}), 400
+
+    existing = get_event_winners(event_id)
+    winner_ids = {
+        str(entry.get("winner_id") or "")
+        for entry in existing.values()
+        if isinstance(entry, dict) and str(entry.get("winner_id") or "").strip()
+    }
+    if str(winner_id).strip() in winner_ids:
+        return jsonify({"error": "This participant has already won a prize in this event."}), 409
+
+    existing[prize_id] = {
+        "prize_id": prize_id,
+        "winner_id": winner_id,
+        "prize_name": prize_name,
+        "winner_name": winner_name,
+        "selected_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    requests.put(winners_url, json=existing)
+    return jsonify({"status": "saved", "winner": existing[prize_id]})
 
 
 @app.route("/api/participants/<event_id>")
@@ -279,8 +447,8 @@ def api_prizes(event_id):
                 pdata = dict(pdata)
                 pdata["id"] = pid
                 prizes.append(pdata)
-            
-    prizes.sort(key=lambda x: x.get("created_at", ""))
+
+    prizes.sort(key=lambda item: (int(item.get("sort_order") or 0), item.get("created_at", "")))
     return jsonify(prizes)
 
 
@@ -398,7 +566,39 @@ def admin_event_detail(event_id):
             flash("Event branding and title updated successfully.", "success")
             return redirect(url_for("admin_event_detail", event_id=event_id))
 
-        # Form for manual participant registration by admin
+        if form_type == "registration_form_settings":
+            field_keys = request.form.getlist("field_key")
+            field_labels = request.form.getlist("field_label")
+            field_types = request.form.getlist("field_type")
+            field_required = request.form.getlist("field_required")
+            field_placeholders = request.form.getlist("field_placeholder")
+
+            fields = []
+            for index, key in enumerate(field_keys):
+                key = (key or "").strip()
+                if not key:
+                    continue
+                label = (field_labels[index] if index < len(field_labels) else "").strip() or key.replace("_", " ").title()
+                field_type = (field_types[index] if index < len(field_types) else "text").strip() or "text"
+                fields.append({
+                    "key": key,
+                    "label": label,
+                    "type": field_type,
+                    "required": key in field_required,
+                    "placeholder": (field_placeholders[index] if index < len(field_placeholders) else "").strip(),
+                    "order": index + 1,
+                })
+
+            if not fields:
+                fields = default_registration_fields()
+            event_payload = {
+                "registration_fields": fields,
+                "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            requests.patch(get_firebase_url(f"/events/{event_id}"), json=event_payload)
+            flash("Registration form fields updated successfully.", "success")
+            return redirect(url_for("admin_event_detail", event_id=event_id))
+
         name = request.form.get("name", "").strip()
         mobile_number = request.form.get("mobile_number", "").strip()
         company_name = request.form.get("company_name", "").strip()
@@ -409,12 +609,14 @@ def admin_event_detail(event_id):
             flash("Please fill in all fields.", "danger")
             return redirect(url_for("admin_event_detail", event_id=event_id))
 
-        # Check for duplicate contact details.
         url = get_firebase_url(f"/participants/{event_id}")
         resp = requests.get(url)
         all_participants = resp.json() if resp.status_code == 200 else {}
         duplicate_field = find_duplicate_participant(
-            all_participants, email, mobile_number
+            all_participants,
+            email,
+            mobile_number,
+            name,
         )
         if duplicate_field:
             flash(
@@ -437,7 +639,6 @@ def admin_event_detail(event_id):
         flash("Participant added manually.", "success")
         return redirect(url_for("admin_event_detail", event_id=event_id))
 
-    # Fetch event details and participants
     event_url = get_firebase_url(f"/events/{event_id}")
     resp = requests.get(event_url)
     event_data = resp.json()
@@ -445,32 +646,33 @@ def admin_event_detail(event_id):
         flash("Event not found.", "danger")
         return redirect(url_for("admin_dashboard"))
     event_data["id"] = event_id
+    event_data["registration_fields"] = get_event_registration_fields(event_data)
 
     url = get_firebase_url(f"/participants/{event_id}")
     resp = requests.get(url)
     data = resp.json() or {}
-    
     participants = []
     if isinstance(data, dict):
         for pid, pdata in data.items():
             pdata["id"] = pid
             participants.append(pdata)
-            
     participants.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
     url = get_firebase_url(f"/prizes/{event_id}")
     resp = requests.get(url)
     data = resp.json() or {}
-    
     prizes = []
     if isinstance(data, dict):
-        for pid, pdata in data.items():
+        for index, (pid, pdata) in enumerate(data.items()):
+            if not isinstance(pdata, dict):
+                continue
+            pdata = dict(pdata)
             pdata["id"] = pid
+            pdata["sort_order"] = int(pdata.get("sort_order") or (index + 1))
             prizes.append(pdata)
-            
-    prizes.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    prizes.sort(key=lambda item: (int(item.get("sort_order") or 0), item.get("created_at", "")))
 
-    return render_template("event_detail.html", participants=participants, prizes=prizes, event=event_data)
+    return render_template("event_detail.html", participants=participants, prizes=prizes, event=event_data, registration_fields=event_data["registration_fields"])
 
 
 @app.route("/admin/events/<event_id>/end", methods=["POST"])
@@ -547,8 +749,14 @@ def add_prize(event_id):
         flash("Prize name is required.", "danger")
         return redirect(url_for("admin_event_detail", event_id=event_id))
 
+    prize_resp = requests.get(get_firebase_url(f"/prizes/{event_id}"))
+    prizes = prize_resp.json() if prize_resp.status_code == 200 else {}
+    existing_prizes = prizes if isinstance(prizes, dict) else {}
+    next_sort = len(existing_prizes) + 1
+
     prize_data = {
         "name": name,
+        "sort_order": next_sort,
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     
@@ -559,6 +767,52 @@ def add_prize(event_id):
         return redirect(url_for("admin_event_detail", event_id=event_id))
     flash("Prize added manually.", "success")
     return redirect(url_for("admin_event_detail", event_id=event_id))
+
+
+@app.route("/admin/events/<event_id>/prizes/reorder", methods=["POST"])
+@login_required
+def reorder_prizes(event_id):
+    """Reorder prizes by the selected priority value."""
+    prize_id = (request.form.get("prize_id") or "").strip()
+    sort_order_raw = request.form.get("sort_order", "1").strip()
+
+    try:
+        sort_order = int(sort_order_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Priority must be a valid number."}), 400
+
+    if not prize_id:
+        return jsonify({"error": "Prize ID is required."}), 400
+
+    prizes_url = get_firebase_url(f"/prizes/{event_id}")
+    prizes_resp = requests.get(prizes_url)
+    data = prizes_resp.json() if prizes_resp.status_code == 200 else {}
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "No prizes found for this event."}), 404
+
+    prizes = []
+    for current_id, prize_data in data.items():
+        if not isinstance(prize_data, dict):
+            continue
+        prize = dict(prize_data)
+        prize["id"] = current_id
+        prizes.append(prize)
+
+    selected = next((prize for prize in prizes if str(prize.get("id")) == str(prize_id)), None)
+    if selected is None:
+        return jsonify({"error": "Prize not found."}), 404
+
+    current_order = sorted(prizes, key=lambda item: (int(item.get("sort_order") or 0), str(item.get("created_at") or "")))
+    current_order = [item for item in current_order if str(item.get("id")) != str(prize_id)]
+    target_index = max(0, min(len(current_order), sort_order - 1))
+    current_order.insert(target_index, selected)
+
+    for index, prize in enumerate(current_order, start=1):
+        prize["sort_order"] = index
+        requests.patch(get_firebase_url(f"/prizes/{event_id}/{prize['id']}"), json={"sort_order": index})
+
+    return jsonify({"status": "updated", "sort_order": sort_order})
 
 
 @app.route("/admin/events/<event_id>/prizes/<prize_id>/delete", methods=["POST"])
@@ -611,6 +865,7 @@ def edit_participant(event_id, participant_id):
             all_participants,
             participant["email"],
             participant["mobile_number"],
+            participant["name"],
             exclude_id=participant_id,
         )
         if duplicate_field:

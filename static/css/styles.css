@@ -425,7 +425,7 @@ a:hover {
 .modal-dialog.modal-dialog-centered {
   align-items: flex-start;
   min-height: 0;
-  margin-top: 1rem;
+  margin-top: 5rem;
   margin-bottom: 1rem;
 }
 
@@ -757,6 +757,164 @@ hr {
   max-width: 220px;
 }
 
+.prize-banner {
+  background: linear-gradient(135deg, rgba(255,175,0,0.18), rgba(255,220,120,0.08));
+  border-color: rgba(255, 230, 120, 0.28) !important;
+}
+
+.slot-machine-shell {
+  position: relative;
+  width: min(100%, 420px);
+  padding: 1rem;
+  border-radius: 1.75rem;
+  background: linear-gradient(145deg, rgba(255, 194, 0, 0.9), rgba(255, 139, 0, 0.8));
+  box-shadow: 0 22px 40px rgba(117, 84, 0, 0.35), inset 0 0 0 4px rgba(255,255,255,0.25);
+  border: 5px solid rgba(128, 78, 0, 0.65);
+}
+
+.slot-machine-glow {
+  position: absolute;
+  inset: 0.75rem;
+  border-radius: 1.35rem;
+  background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.5), rgba(255,255,255,0.05) 55%, transparent 75%);
+  pointer-events: none;
+}
+
+.slot-machine {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, rgba(24, 30, 48, 0.92), rgba(8, 12, 20, 0.96));
+  border: 3px solid rgba(255, 255, 255, 0.18);
+}
+
+.single-slot {
+  max-width: 260px;
+  margin: 0 auto;
+}
+
+.slot-column {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.12));
+  border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 1rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.single-column {
+  width: 100%;
+}
+
+.slot-window {
+  position: relative;
+  height: 228px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.18));
+}
+
+.slot-window::before,
+.slot-window::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.slot-window::before {
+  top: 0;
+  background: linear-gradient(180deg, rgba(14, 17, 26, 0.88), transparent);
+}
+
+.slot-window::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(14, 17, 26, 0.88), transparent);
+}
+
+.slot-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  transition: transform 0.3s ease;
+}
+
+.slot-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  width: 100%;
+  padding: 0 0.6rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: #f5f7ff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+}
+
+.slot-item.is-highlighted {
+  background: rgba(255, 213, 79, 0.18);
+  border-top: 2px solid rgba(255, 222, 112, 0.95);
+  border-bottom: 2px solid rgba(255, 222, 112, 0.95);
+  color: #fff6c5;
+  box-shadow: inset 0 0 16px rgba(255, 213, 79, 0.12);
+}
+
+.slot-highlight {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 58px;
+  border-radius: 0.9rem;
+  border: 3px solid rgba(255, 220, 80, 0.9);
+  background: rgba(255, 210, 70, 0.15);
+  box-shadow: inset 0 0 18px rgba(255, 217, 70, 0.2), 0 0 12px rgba(255, 210, 70, 0.28);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.winner-banner {
+  max-width: 420px;
+  width: 100%;
+  padding: 0.9rem 1.2rem;
+  border-radius: 999px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  background: linear-gradient(135deg, rgba(0,255,65,0.16), rgba(0,212,255,0.1));
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: inset 0 0 18px rgba(255,255,255,0.04);
+  color: #ffffff;
+}
+
+.winners-bottom-card {
+  width: 100%;
+  max-width: 100%;
+  min-height: 220px;
+}
+
+.winner-banner .text-gradient {
+  background: linear-gradient(90deg, #fff9cc, #ffe57d, #d9fffb);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 body.presentation-mode {
   overflow-y: auto;
   overflow-x: hidden;
@@ -780,8 +938,16 @@ body.presentation-mode .container {
 body.presentation-mode .event-themed {
   display: flex;
   min-height: 100vh;
+  width: 100vw;
+  max-width: 100vw;
   align-items: center;
   justify-content: center;
+  padding: 1.5rem;
+}
+
+body.presentation-mode .event-themed > .col-xl-8 {
+  width: min(1200px, 100%);
+  max-width: min(1200px, 100%);
 }
 
 body.presentation-mode .card-glass {
@@ -824,10 +990,32 @@ body.presentation-mode .wheel-indicator {
 
 body.presentation-mode .presentation-row {
   display: flex;
+  flex-direction: column;
   flex-wrap: nowrap;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   gap: 1.25rem;
+  width: 100%;
+}
+
+body.presentation-mode .presentation-row > .col-12 {
+  width: 100%;
+  max-width: 100%;
+}
+
+body.presentation-mode .slot-machine-shell {
+  transform: scale(1.1);
+  transform-origin: center top;
+  max-width: 100%;
+}
+
+body.presentation-mode .glass-winner-card {
+  width: 100%;
+  min-height: 260px;
+}
+
+body.presentation-mode .list-group {
+  max-height: 240px !important;
 }
 
 body.presentation-mode .presentation-wheel-column {
@@ -848,6 +1036,16 @@ body.presentation-mode .glass-winner-card {
   box-shadow: none;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  width: 100%;
+}
+
+body.presentation-mode .winner-banner {
+  max-width: 540px;
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+}
+
+body.presentation-mode .prize-banner {
+  font-size: clamp(0.92rem, 1.25vw, 1.2rem);
 }
 
 .wheel-container {

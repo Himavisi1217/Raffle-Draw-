@@ -61,66 +61,48 @@ endblock %} {% block content %}
         {% endif %}
 
         <div class="row g-4 mt-2{% if presentation_mode %} presentation-row{% endif %}">
-          <div
-            class="col-md-6 d-flex flex-column align-items-center position-relative{% if presentation_mode %} presentation-wheel-column{% endif %}"
-          >
-            <div class="wheel-container mb-4{% if presentation_mode %} presentation-wheel-container{% endif %}">
-              <canvas id="wheelCanvas" width="320" height="320"></canvas>
-              <div class="wheel-center">
-                <span id="wheelSelectedName">Ready</span>
-              </div>
-              <div class="wheel-indicator"></div>
+          <div class="col-12 mb-3">
+            <div class="rounded-4 border p-3 text-center prize-banner">
+              <div class="small text-uppercase text-muted fw-semibold tracking-wide">Current Prize</div>
+              <div id="currentPrizeName" class="h4 fw-bold text-gradient mb-0">Waiting for prize</div>
             </div>
+          </div>
+
+          <div class="col-12 d-flex flex-column align-items-center position-relative">
+            <div class="slot-machine-shell mb-3">
+              <div class="slot-machine-glow"></div>
+              <div class="slot-machine single-slot" aria-label="Participant raffle reel">
+                <div class="slot-column single-column">
+                  <div class="slot-window"><div class="slot-list" id="slotList1"></div></div>
+                </div>
+              </div>
+              <div class="slot-highlight"></div>
+            </div>
+
+            <div id="wheelSelectedName" class="winner-banner text-center mb-3">Ready</div>
 
             {% if not presentation_mode %}
-            <div
-              class="d-flex align-items-center gap-2 mb-3 w-100 justify-content-center"
-            >
-              <label
-                for="numWinners"
-                class="form-label mb-0 w-auto"
-                >Winners to pick:</label
-              >
-              <input
-                type="number"
-                id="numWinners"
-                class="form-control form-control-modern text-center"
-                value="1"
-                min="1"
-                max="50"
-                style="width: 70px"
-              />
+            <div class="d-flex align-items-center gap-2 mb-3 w-100 justify-content-center">
+              <label for="numWinners" class="form-label mb-0 w-auto">Winners to pick:</label>
+              <input type="number" id="numWinners" class="form-control form-control-modern text-center" value="1" min="1" max="50" style="width: 70px" />
             </div>
 
-            <button
-              id="spinButton"
-              class="btn btn-primary btn-modern px-4 w-75 py-2 shadow-sm d-flex align-items-center justify-content-center gap-2"
-              disabled
-            >
+            <button id="spinButton" class="btn btn-primary btn-modern px-4 w-75 py-2 shadow-sm d-flex align-items-center justify-content-center gap-2" disabled>
               <i data-lucide="dices" style="width:18px;height:18px;"></i>
               Spin & Pick
             </button>
-            <p class="small text-muted mt-3 text-center" style="max-width: 250px;">
-              Picks a random prize and secretly draws a winner.
-            </p>
+            <p class="small text-muted mt-3 text-center" style="max-width: 250px;">Picks the next prize winner from the remaining participant list.</p>
             {% endif %}
           </div>
 
-          <div class="col-md-6{% if presentation_mode %} presentation-side-panel{% endif %}">
-            <div class="glass-winner-card p-3 p-md-4 h-100 d-flex flex-column">
-              <div
-                class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary"
-              >
+          <div class="col-12">
+            <div class="glass-winner-card p-3 p-md-4 d-flex flex-column winners-bottom-card">
+              <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
                 <div>
                   <div class="winner-title"><i data-lucide="award" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px;color:var(--accent-secondary)"></i> Winners</div>
                   <div class="winner-main text-gradient">Current Selected</div>
                 </div>
-                <span
-                  class="badge bg-secondary-soft text-secondary"
-                  id="winnerCountBadge"
-                >
-                  0 selected
-                </span>
+                <span class="badge bg-secondary-soft text-secondary" id="winnerCountBadge">0 selected</span>
               </div>
 
               <div class="mb-3 p-2 rounded" style="background: rgba(95,224,165,0.08); border: 1px solid rgba(95,224,165,0.15);">
@@ -128,28 +110,13 @@ endblock %} {% block content %}
                 <div id="raffleLoop" class="fw-semibold text-primary" style="min-height: 24px; letter-spacing: 0.02em;">Waiting for participants...</div>
               </div>
 
-              <ul
-                class="list-group list-group-flush small flex-grow-1"
-                id="winnersList"
-                style="overflow-y: auto; max-height: 250px"
-              ></ul>
+              <ul class="list-group list-group-flush small flex-grow-1" id="winnersList" style="overflow-y: auto; max-height: 220px"></ul>
 
               {% if not presentation_mode %}
-              <div
-                class="mt-4 pt-3 border-top"
-              >
+              <div class="mt-4 pt-3 border-top">
                 <div class="d-flex gap-2">
-                  <button
-                    id="drawServerButton"
-                    class="btn btn-outline-secondary btn-sm flex-grow-1 disabled"
-                    style="display: none"
-                  >
-                    Use Server-Side
-                  </button>
-                  <button
-                    id="clearButton"
-                    class="btn btn-outline-danger btn-sm w-100 fw-medium d-flex align-items-center justify-content-center gap-2"
-                  >
+                  <button id="drawServerButton" class="btn btn-outline-secondary btn-sm flex-grow-1 disabled" style="display: none">Use Server-Side</button>
+                  <button id="clearButton" class="btn btn-outline-danger btn-sm w-100 fw-medium d-flex align-items-center justify-content-center gap-2">
                     <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i>
                     Clear Winners List
                   </button>

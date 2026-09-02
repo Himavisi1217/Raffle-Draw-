@@ -3,6 +3,7 @@
 const EVENT_ID = window.CURRENT_EVENT_ID || "";
 const API_PARTICIPANTS = `/api/participants/${EVENT_ID}`;
 const API_PRIZES = `/api/prizes/${EVENT_ID}`;
+const API_WINNERS = `/api/winners/${EVENT_ID}`;
 const PRESENTATION_MODE = window.PRESENTATION_MODE || new URLSearchParams(window.location.search).get("presentation") === "1";
 const SPIN_SYNC_KEY = "sltm_raffle_spin_sync";
 
@@ -14,8 +15,6 @@ let spinning = false;
 let raffleIndex = 0;
 let raffleTimer = null;
 
-const canvas = document.getElementById("wheelCanvas");
-const ctx = canvas ? canvas.getContext("2d") : null;
 const spinButton = document.getElementById("spinButton");
 const clearButton = document.getElementById("clearButton");
 const winnersList = document.getElementById("winnersList");
@@ -24,89 +23,137 @@ const prizeCountBadge = document.getElementById("prizeCountBadge");
 const winnerCountBadge = document.getElementById("winnerCountBadge");
 const numWinnersInput = document.getElementById("numWinners");
 const raffleLoop = document.getElementById("raffleLoop");
+const currentPrizeName = document.getElementById("currentPrizeName");
+const slotLists = Array.from(document.querySelectorAll(".slot-list"));
+
+function sortPrizes(list) {
+  return [...list].sort((a, b) => {
+    const orderA = Number(a?.sort_order ?? a?.order ?? 0);
+    const orderB = Number(b?.sort_order ?? b?.order ?? 0);
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a?.created_at || "").localeCompare(String(b?.created_at || ""));
+  });
+}
+
+function sortParticipants(list) {
+  return [...list].sort((a, b) => String(a?.created_at || "").localeCompare(String(b?.created_at || "")));
+}
+
+function sortSelectedWinners(list) {
+  return [...list].sort((a, b) => {
+    const prizeA = prizes.find((prize) => String(prize.id) === String(a?.prize?.id));
+    const prizeB = prizes.find((prize) => String(prize.id) === String(b?.prize?.id));
+    const orderA = Number(prizeA?.sort_order ?? prizeA?.order ?? 0);
+    const orderB = Number(prizeB?.sort_order ?? prizeB?.order ?? 0);
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a?.winner?.name || "").localeCompare(String(b?.winner?.name || ""));
+  });
+}
+
+function getAvailablePrizes() {
+  return sortPrizes(prizes.filter((prize) => !selectedWinners.some((entry) => String(entry.prize.id) === String(prize.id))));
+}
+
+function getAvailableParticipants() {
+  return sortParticipants(participants.filter((person) => !selectedWinners.some((entry) => String(entry.winner.id) === String(person.id))));
+}
+
+function isWinnerAlreadySelected(winnerId) {
+  return selectedWinners.some((entry) => String(entry.winner.id) === String(winnerId));
+}
+
+function setCurrentPrizeDisplay() {
+  const activePrize = getAvailablePrizes()[0] || null;
+  if (currentPrizeName) {
+    currentPrizeName.textContent = activePrize ? activePrize.name : "All prizes awarded";
+  }
+}
+
+function buildSlotValues(names, count = 13) {
+  if (!names.length) return ["Waiting", "Waiting", "Waiting"]; 
+  const repeated = [];
+  for (let index = 0; index < count; index += 1) {
+    repeated.push(names[index % names.length]);
+  }
+  return repeated;
+}
+
+function renderSlots(targetNames) {
+  const primaryList = slotLists[0];
+  if (!primaryList) return;
+
+  const values = Array.from({ length: 9 }, (_, index) => {
+    if (index === 4) return targetNames[0] || "Waiting";
+    const fallback = targetNames[0] || "Waiting";
+    return fallback;
+  });
+
+  primaryList.innerHTML = values
+    .map((name, index) => `<div class="slot-item ${index === 4 ? "is-highlighted" : ""}">${name}</div>`)
+    .join("");
+}
+
+function animateSlotSpin(finalWinnerName) {
+  const availableNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
+  if (!availableNames.length) return Promise.resolve();
+
+  const primaryList = slotLists[0];
+  if (!primaryList) return Promise.resolve();
+
+  const start = performance.now();
+  const duration = 1500;
+
+  return new Promise((resolve) => {
+    const tick = (now) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const stepNames = availableNames.length ? buildSlotValues(availableNames, 18) : ["Waiting"];
+      const offset = Math.min(12, Math.floor(progress * 14));
+      const values = [...stepNames.slice(offset), ...stepNames.slice(0, offset)];
+      const combined = values.length > 1 ? values : [finalWinnerName];
+
+      primaryList.innerHTML = combined
+        .slice(0, 9)
+        .map((name, index) => `<div class="slot-item ${index === 4 ? "is-highlighted" : ""}">${name}</div>`)
+        .join("");
+
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        renderSlots([finalWinnerName]);
+        resolve();
+      }
+    };
+
+    requestAnimationFrame(tick);
+  });
+}
 
 function publishSpinToPopup(payload) {
   if (!payload || !EVENT_ID) return;
-
   const data = { ...payload, eventId: EVENT_ID, timestamp: Date.now() };
   localStorage.setItem(SPIN_SYNC_KEY, JSON.stringify(data));
-
   if (window.opener && !window.opener.closed) {
     try {
       window.opener.postMessage({ type: "sltm_raffle_spin", payload: data }, window.location.origin);
-    } catch (error) {
-      // Ignore cross-window postMessage issues when the opener is unavailable.
-    }
+    } catch (error) {}
   }
 }
 
 function publishClearToPopup() {
   if (!EVENT_ID) return;
-
-  const data = {
-    type: "clear",
-    eventId: EVENT_ID,
-    timestamp: Date.now()
-  };
-
+  const data = { type: "clear", eventId: EVENT_ID, timestamp: Date.now() };
   localStorage.setItem(SPIN_SYNC_KEY, JSON.stringify(data));
-
   if (window.opener && !window.opener.closed) {
     try {
       window.opener.postMessage({ type: "sltm_raffle_clear", payload: data }, window.location.origin);
-    } catch (error) {
-      // Ignore cross-window postMessage issues when the opener is unavailable.
-    }
+    } catch (error) {}
   }
-}
-
-function animateWheelToPrize(prizeIndex, winnerName, finishText, updateCenterText = true) {
-  if (!ctx || !canvas || prizeIndex < 0 || !prizes.length) return Promise.resolve();
-
-  const duration = 2500;
-  const start = performance.now();
-
-  return new Promise((resolve) => {
-    function step(now) {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const randomExtraSpins = Math.PI * 8;
-      const sliceAngle = (2 * Math.PI) / prizes.length;
-      const targetAngleForTop = -Math.PI / 2;
-      const winnerCenterAngle = prizeIndex * sliceAngle + sliceAngle / 2;
-      const endRotation = randomExtraSpins + (targetAngleForTop - winnerCenterAngle);
-      const currentAngle = eased * endRotation;
-
-      ctx.save();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(currentAngle);
-      ctx.translate(-canvas.width / 2, -canvas.height / 2);
-      drawWheel();
-      ctx.restore();
-
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        resolve();
-      }
-    }
-
-    requestAnimationFrame(step);
-  }).then(() => {
-    if (updateCenterText && wheelSelectedName) {
-      wheelSelectedName.innerHTML = finishText || `<span class="text-gradient">${winnerName || "Winner"}</span>`;
-    }
-  });
 }
 
 function applyPresentationSpin(payload) {
   if (!PRESENTATION_MODE || !payload) return;
-
-  if (payload.eventId && payload.eventId !== EVENT_ID) {
-    return;
-  }
+  if (payload.eventId && payload.eventId !== EVENT_ID) return;
 
   const winnerId = payload.winnerId ?? payload.winner?.id;
   const prizeId = payload.prizeId ?? payload.prize?.id;
@@ -114,7 +161,6 @@ function applyPresentationSpin(payload) {
   const prizeName = payload.prizeName || payload.prize?.name || "Prize";
 
   if (!winnerId || !prizeId) return;
-
   if (!Array.isArray(participants) || !Array.isArray(prizes) || !participants.length || !prizes.length) {
     pendingPresentationPayload = payload;
     return;
@@ -130,6 +176,10 @@ function applyPresentationSpin(payload) {
     (item) => String(item.winner.id) === String(winnerId) && String(item.prize.id) === String(prizeId)
   );
 
+  if (isWinnerAlreadySelected(winnerId)) {
+    return;
+  }
+
   if (!alreadySelected) {
     const winner = participants.find((person) => String(person.id) === String(winnerId)) || {
       id: winnerId,
@@ -137,39 +187,60 @@ function applyPresentationSpin(payload) {
       company_name: "",
       position: ""
     };
-    const prize = prizes.find((item) => String(item.id) === String(prizeId)) || {
-      id: prizeId,
-      name: prizeName
-    };
-
-    selectedWinners.push({ winner, prize });
+    const prize = prizes.find((item) => String(item.id) === String(prizeId)) || { id: prizeId, name: prizeName };
+    selectedWinners = sortSelectedWinners([...selectedWinners, { winner, prize }]);
     updateWinnersUI();
+    saveWinnerToServer({ prizeId, winnerId, prizeName, winnerName });
   }
 
   pendingPresentationPayload = null;
-  animateWheelToPrize(prizeIndex, winnerName, `<span class="text-gradient">${winnerName}</span>`, false);
+  if (wheelSelectedName) wheelSelectedName.textContent = winnerName;
+  setCurrentPrizeDisplay();
 }
 
 async function loadData() {
   try {
-    const [partRes, prizeRes] = await Promise.all([
+    const [partRes, prizeRes, winnerRes] = await Promise.all([
       fetch(API_PARTICIPANTS),
-      fetch(API_PRIZES)
+      fetch(API_PRIZES),
+      fetch(API_WINNERS)
     ]);
 
-    if (!partRes.ok || !prizeRes.ok) {
+    if (!partRes.ok || !prizeRes.ok || !winnerRes.ok) {
       throw new Error("Unable to load raffle data");
     }
 
     const fetchedParticipants = await partRes.json();
     const fetchedPrizes = await prizeRes.json();
+    const fetchedWinners = await winnerRes.json();
 
     if (!Array.isArray(fetchedParticipants) || !Array.isArray(fetchedPrizes)) {
       throw new Error("Raffle data has an invalid format");
     }
 
-    participants = fetchedParticipants;
-    prizes = fetchedPrizes;
+    participants = sortParticipants(fetchedParticipants);
+    prizes = sortPrizes(fetchedPrizes);
+    selectedWinners = [];
+
+    if (fetchedWinners && typeof fetchedWinners === "object") {
+      Object.values(fetchedWinners).forEach((winnerEntry) => {
+        const winner = participants.find((person) => String(person.id) === String(winnerEntry.winner_id)) || {
+          id: winnerEntry.winner_id,
+          name: winnerEntry.winner_name || "Winner",
+          company_name: "",
+          position: ""
+        };
+        const prize = prizes.find((item) => String(item.id) === String(winnerEntry.prize_id)) || {
+          id: winnerEntry.prize_id,
+          name: winnerEntry.prize_name || "Prize"
+        };
+
+        if (winnerEntry.prize_id && winnerEntry.winner_id) {
+          selectedWinners.push({ winner, prize });
+        }
+      });
+    }
+    selectedWinners = sortSelectedWinners(selectedWinners);
 
     if (prizeCountBadge) {
       prizeCountBadge.innerHTML = `<i data-lucide="gift" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"></i>${prizes.length} prizes | ${participants.length} participants`;
@@ -177,20 +248,23 @@ async function loadData() {
     }
 
     updateRaffleLoop();
+    updateWinnersUI();
+    setCurrentPrizeDisplay();
     updateButtonState();
 
     if (numWinnersInput && numWinnersInput.max !== undefined) {
       const maxPicks = Math.min(participants.length, prizes.length);
-      if (maxPicks > 0) {
-        numWinnersInput.max = maxPicks;
-      }
+      if (maxPicks > 0) numWinnersInput.max = maxPicks;
     }
 
     if (PRESENTATION_MODE && pendingPresentationPayload) {
       applyPresentationSpin(pendingPresentationPayload);
     }
 
-    drawWheel();
+    const availableNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
+    if (availableNames.length) {
+      renderSlots(availableNames);
+    }
   } catch (error) {
     if (prizeCountBadge) {
       prizeCountBadge.textContent = prizes.length ? `${prizes.length} prizes | refresh unavailable` : "Unable to load prizes";
@@ -199,103 +273,35 @@ async function loadData() {
       raffleLoop.textContent = "Unable to load participants. Please refresh.";
     }
     updateButtonState();
-    drawWheel();
   }
 }
 
 function updateButtonState() {
-  const availableParticipants = participants.filter((p) => !selectedWinners.some((w) => w.winner.id === p.id));
-  const availablePrizes = prizes.filter((pr) => !selectedWinners.some((w) => w.prize.id === pr.id));
-
+  const availableParticipants = getAvailableParticipants();
+  const availablePrizes = getAvailablePrizes();
   if (spinButton) {
     spinButton.disabled = availableParticipants.length === 0 || availablePrizes.length === 0 || spinning;
   }
 }
 
-function drawWheel() {
-  if (!ctx || !canvas) return;
-  const availablePrizes = prizes.filter((pr) => !selectedWinners.some((w) => w.prize.id === pr.id));
-  const wheelColors = ["#b9e8d2", "#b9dff2", "#f4d7a8", "#d7c8ed", "#f2c7c7", "#c9e3d8", "#c9d9ef", "#ead9b8"];
-
-  if (!availablePrizes.length) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#eaf8f3";
-    ctx.beginPath();
-    ctx.arc(160, 160, 150, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#516d66";
-    ctx.font = "600 14px 'Poppins', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(prizes.length ? "All prizes won!" : "No prizes yet", 160, 165);
-    return;
-  }
-
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const radius = 150;
-  const sliceAngle = (2 * Math.PI) / availablePrizes.length;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  availablePrizes.forEach((pr, index) => {
-    const startAngle = index * sliceAngle;
-    const endAngle = startAngle + sliceAngle;
-
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, startAngle, endAngle);
-    ctx.closePath();
-    ctx.fillStyle = wheelColors[index % wheelColors.length];
-    ctx.fill();
-
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(startAngle + sliceAngle / 2);
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#173f36";
-    ctx.font = "600 12px 'Poppins', sans-serif";
-    ctx.shadowColor = "rgba(255,255,255,0.7)";
-    ctx.shadowBlur = 4;
-
-    let label = pr.name;
-    if (label.length > 15) label = label.substring(0, 15) + '...';
-    ctx.fillText(label, radius - 20, 4);
-    ctx.restore();
-  });
-}
-
 function updateWinnersUI() {
   if (!winnersList) return;
+  selectedWinners = sortSelectedWinners(selectedWinners);
   winnersList.innerHTML = "";
-
   selectedWinners.forEach((item, index) => {
     const li = document.createElement("li");
     li.className = "list-group-item d-flex justify-content-between align-items-start";
     li.style.animation = "fadeIn 0.5s ease-in-out";
     li.innerHTML = `
       <div class="me-2 w-100">
-        <div class="d-flex justify-content-between">
-           <div class="fw-semibold text-primary">${index + 1}. <span class="text-primary">${item.winner.name}</span></div>
-        </div>
-        <div class="text-muted small mb-1">${item.winner.company_name} · ${item.winner.position}</div>
+        <div class="fw-semibold text-primary">${index + 1}. <span class="text-primary">${item.winner.name}</span></div>
+        <div class="text-muted small mb-1">${item.winner.company_name || ""} ${item.winner.position ? "· " + item.winner.position : ""}</div>
         <div class="badge bg-success-soft text-white text-wrap text-start mt-1" style="color: #ffffff !important;">
           <i data-lucide="gift" style="width:10px;height:10px;margin-right:2px;vertical-align:-1px; color: #ffffff;"></i>
           Won: ${item.prize.name}
         </div>
       </div>
     `;
-
-    if (!document.getElementById("fadeInKeyframes")) {
-      const style = document.createElement("style");
-      style.id = "fadeInKeyframes";
-      style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`;
-      document.head.appendChild(style);
-    }
-
     winnersList.appendChild(li);
   });
 
@@ -310,7 +316,7 @@ function updateRaffleLoop() {
     return;
   }
 
-  const loopNames = participants.map((p) => p.name).filter(Boolean);
+  const loopNames = getAvailableParticipants().map((p) => p.name).filter(Boolean);
   if (!loopNames.length) {
     raffleLoop.textContent = "Waiting for participants...";
     return;
@@ -323,7 +329,7 @@ function updateRaffleLoop() {
   if (raffleTimer) clearInterval(raffleTimer);
   raffleTimer = setInterval(() => {
     if (!participants.length || spinning) return;
-    const activeNames = participants.map((p) => p.name).filter(Boolean);
+    const activeNames = getAvailableParticipants().map((p) => p.name).filter(Boolean);
     if (!activeNames.length) return;
     raffleIndex = (raffleIndex + 1) % activeNames.length;
     raffleLoop.textContent = `Now showing: ${activeNames[raffleIndex]}`;
@@ -334,108 +340,106 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function spinAndPickLocal() {
-  if (spinning || !numWinnersInput || !spinButton || !wheelSelectedName || !clearButton) return;
+async function saveWinnerToServer({ prizeId, winnerId, prizeName, winnerName }) {
+  if (!EVENT_ID || !prizeId || !winnerId) return;
+  try {
+    const response = await fetch(API_WINNERS, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prize_id: prizeId, winner_id: winnerId, prize_name: prizeName, winner_name: winnerName })
+    });
+    if (!response.ok) console.error("Winner save failed:", await response.text());
+  } catch (error) {
+    console.error("Winner save error:", error);
+  }
+}
 
-  const requestedWinners = parseInt(numWinnersInput.value, 10) || 1;
-  const numWinners = Math.max(1, Math.min(requestedWinners, participants.length, prizes.length));
+async function spinAndPickLocal() {
+  if (spinning || !spinButton || !wheelSelectedName || !clearButton) return;
+
+  const requestedWinners = parseInt(numWinnersInput?.value || "1", 10) || 1;
+  const availableParticipants = getAvailableParticipants();
+  const availablePrizes = getAvailablePrizes();
+  const numWinners = Math.max(1, Math.min(requestedWinners, availableParticipants.length, availablePrizes.length));
+
+  if (!availableParticipants.length || !availablePrizes.length) {
+    wheelSelectedName.textContent = "Finished!";
+    return;
+  }
 
   spinning = true;
   updateButtonState();
   clearButton.disabled = true;
   spinButton.classList.add("btn-spinning");
 
-  for (let i = 0; i < numWinners; i++) {
-    const availableParticipants = participants.filter((p) => !selectedWinners.some((w) => w.winner.id === p.id));
-    const availablePrizes = prizes.filter((pr) => !selectedWinners.some((w) => w.prize.id === pr.id));
+  try {
+    for (let i = 0; i < numWinners; i += 1) {
+      const currentAvailableParticipants = getAvailableParticipants();
+      const currentAvailablePrizes = getAvailablePrizes();
 
-    if (availableParticipants.length === 0 || availablePrizes.length === 0) {
-      wheelSelectedName.textContent = "Finished!";
-      break;
-    }
-
-    wheelSelectedName.innerHTML = '<span class="text-primary">Spinning...</span>';
-
-    const randomPrizeIndex = Math.floor(Math.random() * availablePrizes.length);
-    const thisPrize = availablePrizes[randomPrizeIndex];
-    const randomWinnerIndex = Math.floor(Math.random() * availableParticipants.length);
-    const thisWinner = availableParticipants[randomWinnerIndex];
-
-    const duration = 2500;
-    const start = performance.now();
-
-    await new Promise((resolve) => {
-      function animate(now) {
-        const elapsed = now - start;
-        const t = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - t, 3);
-        const randomExtraSpins = Math.PI * 8;
-        const sliceAngle = (2 * Math.PI) / availablePrizes.length;
-        const targetAngleForTop = -Math.PI / 2;
-        const winnerCenterAngle = randomPrizeIndex * sliceAngle + sliceAngle / 2;
-        const endRotation = randomExtraSpins + (targetAngleForTop - winnerCenterAngle);
-        const currentAngle = eased * endRotation;
-
-        ctx.save();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(currentAngle);
-        ctx.translate(-canvas.width / 2, -canvas.height / 2);
-        drawWheel();
-        ctx.restore();
-
-        if (t < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          resolve();
-        }
+      if (!currentAvailableParticipants.length || !currentAvailablePrizes.length) {
+        wheelSelectedName.textContent = "Finished!";
+        break;
       }
 
-      requestAnimationFrame(animate);
-    });
+      const thisPrize = currentAvailablePrizes[0];
+      const thisWinner = currentAvailableParticipants[Math.floor(Math.random() * currentAvailableParticipants.length)];
+      if (isWinnerAlreadySelected(thisWinner.id)) {
+        continue;
+      }
+      const spinNames = currentAvailableParticipants.map((person) => person.name).filter(Boolean);
+      if (spinNames.length) {
+        wheelSelectedName.innerHTML = '<span class="text-primary">Spinning...</span>';
+        renderSlots(spinNames);
+        await animateSlotSpin(thisWinner.name);
+      }
 
-    selectedWinners.push({ winner: thisWinner, prize: thisPrize });
-    publishSpinToPopup({ prizeId: thisPrize.id, winnerId: thisWinner.id, prizeName: thisPrize.name, winnerName: thisWinner.name });
-    updateWinnersUI();
-    wheelSelectedName.innerHTML = `<span class="text-gradient">${thisPrize.name}</span>`;
+      selectedWinners = sortSelectedWinners([...selectedWinners, { winner: thisWinner, prize: thisPrize }]);
+      saveWinnerToServer({ prizeId: thisPrize.id, winnerId: thisWinner.id, prizeName: thisPrize.name, winnerName: thisWinner.name });
+      publishSpinToPopup({ prizeId: thisPrize.id, winnerId: thisWinner.id, prizeName: thisPrize.name, winnerName: thisWinner.name });
+      updateWinnersUI();
+      setCurrentPrizeDisplay();
+      wheelSelectedName.innerHTML = `<span class="text-gradient">${thisWinner.name}</span>`;
+      updateButtonState();
 
-    if (i < numWinners - 1 && availableParticipants.length > 1 && availablePrizes.length > 1) {
-      await sleep(1500);
+      if (i < numWinners - 1) {
+        await sleep(1000);
+      }
     }
-  }
-
-  drawWheel();
-  spinning = false;
-  spinButton.classList.remove("btn-spinning");
-  updateButtonState();
-  clearButton.disabled = false;
-
-  if (selectedWinners.length > 0) {
-    wheelSelectedName.innerHTML = '<span class="text-gradient">Complete</span>';
+  } finally {
+    spinning = false;
+    spinButton.classList.remove("btn-spinning");
+    clearButton.disabled = false;
+    updateButtonState();
+    if (getAvailablePrizes().length === 0) {
+      wheelSelectedName.innerHTML = '<span class="text-gradient">Complete</span>';
+    }
   }
 }
 
 function clearPresentationState() {
   selectedWinners = [];
   updateWinnersUI();
-  if (wheelSelectedName) {
-    wheelSelectedName.textContent = "Ready";
-  }
-  if (raffleLoop) {
-    raffleLoop.textContent = "Now showing: " + (participants[0]?.name || "Waiting for participants...");
-  }
-  drawWheel();
+  if (wheelSelectedName) wheelSelectedName.textContent = "Ready";
+  if (raffleLoop) raffleLoop.textContent = "Now showing: " + (getAvailableParticipants()[0]?.name || "Waiting for participants...");
+  setCurrentPrizeDisplay();
   updateButtonState();
 }
 
-function clearWinners() {
+async function clearWinners() {
   selectedWinners = [];
   updateWinnersUI();
-  wheelSelectedName.textContent = "Ready";
-  if (raffleLoop) raffleLoop.textContent = "Now showing: " + (participants[0]?.name || "Waiting for participants...");
-  drawWheel();
+  if (wheelSelectedName) wheelSelectedName.textContent = "Ready";
+  if (raffleLoop) raffleLoop.textContent = "Now showing: " + (getAvailableParticipants()[0]?.name || "Waiting for participants...");
+  setCurrentPrizeDisplay();
   updateButtonState();
   publishClearToPopup();
+
+  try {
+    await fetch(API_WINNERS, { method: "DELETE" });
+  } catch (error) {
+    console.error("Failed to clear saved winners:", error);
+  }
 }
 
 if (spinButton) spinButton.addEventListener("click", spinAndPickLocal);
@@ -447,16 +451,12 @@ if (PRESENTATION_MODE) {
     try {
       const payload = JSON.parse(event.newValue);
       if (!payload || payload.eventId !== EVENT_ID) return;
-
       if (payload.type === "clear") {
         clearPresentationState();
         return;
       }
-
       applyPresentationSpin(payload);
-    } catch (error) {
-      // Ignore malformed sync payloads.
-    }
+    } catch (error) {}
   });
 
   window.addEventListener("message", (event) => {
@@ -471,7 +471,7 @@ if (PRESENTATION_MODE) {
   });
 }
 
-if (canvas) {
+if (slotLists.length) {
   loadData();
   setInterval(() => {
     if (!spinning) loadData();

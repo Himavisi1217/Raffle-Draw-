@@ -133,6 +133,35 @@ endblock %} {% block content %}
     <div class="card card-glass shadow-lg border-0 mb-4">
       <div class="card-body p-3 p-md-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h2 class="h6 fw-semibold mb-1">
+              <i data-lucide="clipboard-list" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--text-muted)"></i>
+              Registration Form Builder
+            </h2>
+            <p class="text-muted mb-0 small">Edit the public registration form and add or remove fields.</p>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('admin_event_detail', event_id=event.id) }}">
+          <input type="hidden" name="form_type" value="registration_form_settings" />
+          <div id="registrationFieldsContainer" class="row g-3"></div>
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="button" class="btn btn-outline-primary btn-sm btn-modern" id="addRegistrationFieldBtn">
+              <i data-lucide="plus" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+              Add Field
+            </button>
+            <button type="submit" class="btn btn-primary btn-modern btn-sm">
+              <i data-lucide="save" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+              Save Form
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card card-glass shadow-lg border-0 mb-4">
+      <div class="card-body p-3 p-md-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
           <h2 class="h6 fw-semibold mb-0">
             <i data-lucide="gift" style="width:16px;height:16px;margin-right:6px;vertical-align:-2px;color:var(--text-muted)"></i>
             Event Prizes
@@ -158,14 +187,23 @@ endblock %} {% block content %}
             <thead>
               <tr>
                 <th scope="col">Prize Name</th>
+                <th scope="col">Priority</th>
                 <th scope="col">Added Date</th>
                 <th scope="col" class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody id="prizesTableBody">
               {% if prizes %} {% for prize in prizes %}
+              {% set prize_priority = (prize.get('sort_order', loop.index) | int) %}
               <tr>
                 <td><strong>{{ prize.name }}</strong></td>
+                <td>
+                  <select class="form-select form-select-sm prize-priority-select" data-prize-id="{{ prize.id }}" aria-label="Set prize priority">
+                    {% for priority in range(1, prizes|length + 1) %}
+                    <option value="{{ priority }}" {% if prize_priority == priority %}selected{% endif %}>{{ priority }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
                 <td class="text-muted">{{ prize.created_at[:10] if prize.created_at else 'N/A' }}</td>
                 <td class="text-end">
                   <form
@@ -182,7 +220,7 @@ endblock %} {% block content %}
               </tr>
               {% endfor %} {% else %}
               <tr>
-                <td colspan="3" class="text-center text-muted py-5">
+                <td colspan="4" class="text-center text-muted py-5">
                   <i data-lucide="gift" style="width:28px;height:28px;margin-bottom:8px;display:block;margin:0 auto 8px"></i>
                   No prizes have been added yet.
                 </td>
@@ -452,14 +490,119 @@ endblock %} {% block content %}
 
 {% block scripts %}
 <script>
-  // Script to update the participant list in real-time
   const EVENT_ID = "{{ event.id }}";
   const FETCH_URL = `/api/participants/${EVENT_ID}`;
   const tableBody = document.getElementById("participantsTableBody");
   const totalBadge = document.getElementById("participantCountBadge");
+  const registrationFields = {{ registration_fields|tojson }};
+
+  document.querySelectorAll('.prize-priority-select').forEach((select) => {
+    select.addEventListener('change', async function () {
+      const prizeId = this.dataset.prizeId;
+      const sortOrder = this.value;
+
+      try {
+        const response = await fetch(`/admin/events/${EVENT_ID}/prizes/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+          body: new URLSearchParams({ prize_id: prizeId, sort_order: sortOrder })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'Unable to update prize priority');
+        }
+
+        window.location.reload();
+      } catch (error) {
+        window.alert(error.message || 'Unable to update prize priority');
+      }
+    });
+  });
+
+  function buildRegistrationFieldRow(field, index) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "col-md-6";
+    wrapper.innerHTML = `
+      <div class="border rounded-4 p-3 bg-white bg-opacity-10 h-100">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-semibold text-uppercase text-muted">Field ${index + 1}</span>
+          <button type="button" class="btn btn-outline-danger btn-sm remove-registration-field" aria-label="Remove field">Remove</button>
+        </div>
+        <div class="row g-2">
+          <div class="col-12">
+            <label class="form-label small">Field key</label>
+            <input type="text" class="form-control form-control-modern" name="field_key" value="${field.key || ''}" required />
+          </div>
+          <div class="col-12">
+            <label class="form-label small">Label</label>
+            <input type="text" class="form-control form-control-modern" name="field_label" value="${field.label || ''}" required />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">Type</label>
+            <select class="form-select form-control-modern" name="field_type">
+              <option value="text" ${field.type === 'text' ? 'selected' : ''}>Text</option>
+              <option value="email" ${field.type === 'email' ? 'selected' : ''}>Email</option>
+              <option value="tel" ${field.type === 'tel' ? 'selected' : ''}>Telephone</option>
+              <option value="checkbox" ${field.type === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">Placeholder</label>
+            <input type="text" class="form-control form-control-modern" name="field_placeholder" value="${field.placeholder || ''}" />
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" name="field_required" value="${field.key || 'required'}" ${field.required ? 'checked' : ''} />
+              <label class="form-check-label small">Required</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    wrapper.querySelector(".remove-registration-field").addEventListener("click", () => {
+      wrapper.remove();
+    });
+
+    return wrapper;
+  }
+
+  function renderRegistrationFields() {
+    const container = document.getElementById("registrationFieldsContainer");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const fields = Array.isArray(registrationFields) && registrationFields.length ? registrationFields : [
+      { key: "name", label: "Full Name", type: "text", required: true, placeholder: "John Doe" },
+      { key: "mobile_number", label: "Mobile Number", type: "tel", required: true, placeholder: "+94 7X XXX XXXX" },
+      { key: "company_name", label: "Company Name", type: "text", required: true, placeholder: "Acme Corp" },
+      { key: "position", label: "Position", type: "text", required: true, placeholder: "Software Engineer" },
+      { key: "email", label: "Email", type: "email", required: true, placeholder: "john@example.com" },
+      { key: "data_sharing_consent", label: "I agree that my registration data may be shared with the publishers.", type: "checkbox", required: true, placeholder: "" }
+    ];
+
+    fields.forEach((field, index) => {
+      container.appendChild(buildRegistrationFieldRow(field, index));
+    });
+  }
+
+  document.getElementById("addRegistrationFieldBtn")?.addEventListener("click", () => {
+    const container = document.getElementById("registrationFieldsContainer");
+    if (!container) return;
+    const fieldCount = container.querySelectorAll(".border.rounded-4").length;
+    container.appendChild(buildRegistrationFieldRow({
+      key: `new_field_${fieldCount + 1}`,
+      label: `New Field ${fieldCount + 1}`,
+      type: "text",
+      required: false,
+      placeholder: ""
+    }, fieldCount));
+  });
+
+  renderRegistrationFields();
 
   async function refreshParticipants() {
-    // Only refresh if the "Add Participant" modal is NOT open to avoid focus issues
     const modalElement = document.getElementById("addParticipantModal");
     if (modalElement && modalElement.classList.contains("show")) return;
 
@@ -473,7 +616,6 @@ endblock %} {% block content %}
         throw new Error("Participant refresh returned an invalid response");
       }
 
-      // Update the "Total Count" badge
       if (totalBadge) totalBadge.textContent = `Total: ${participants.length}`;
 
       if (participants.length === 0) {
@@ -488,20 +630,18 @@ endblock %} {% block content %}
         return;
       }
 
-      // Render new table rows
       let rowsHtml = "";
       participants.forEach((p) => {
-        // Construct the Edit URL (can be hardcoded with IDs)
         const editUrl = `/admin/events/${EVENT_ID}/participants/${p.id}/edit`;
         const deleteUrl = `/admin/events/${EVENT_ID}/participants/${p.id}/delete`;
 
         rowsHtml += `
           <tr>
             <td><strong>${p.name}</strong></td>
-            <td>${p.company_name}</td>
-            <td>${p.position}</td>
-            <td>${p.mobile_number}</td>
-            <td>${p.email}</td>
+            <td>${p.company_name || ""}</td>
+            <td>${p.position || ""}</td>
+            <td>${p.mobile_number || ""}</td>
+            <td>${p.email || ""}</td>
             <td class="text-end">
               <a href="${editUrl}" class="btn btn-outline-secondary btn-sm btn-modern me-1" title="Edit">
                 <i data-lucide="edit-2" style="width:12px;height:12px"></i>
@@ -521,15 +661,13 @@ endblock %} {% block content %}
     }
   }
 
-  // Poll every 5 seconds
   setInterval(refreshParticipants, 5000);
 
-  // Download QR Code Function
   async function downloadQR() {
     const qrImg = document.getElementById('qrImage');
     const qrUrl = qrImg.src;
     const eventName = "{{ event.name }}".replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    
+
     try {
       const response = await fetch(qrUrl);
       const blob = await response.blob();
