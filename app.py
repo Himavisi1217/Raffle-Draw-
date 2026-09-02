@@ -35,14 +35,25 @@ static_dir = os.path.join(base_dir, 'static')
 app = Flask(__name__, 
             template_folder=template_dir, 
             static_folder=static_dir)
-# SECRET_KEY is used for session management and flashing messages
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
+secret_key = os.getenv("SECRET_KEY") or os.getenv("FLASK_SECRET_KEY")
+if not secret_key:
+    app.logger.warning("SECRET_KEY is not configured. Set it in the environment before deployment.")
+    secret_key = "__replace_with_strong_random_value__"
+app.config["SECRET_KEY"] = secret_key
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = not app.debug
+app.config["SESSION_COOKIE_NAME"] = "raffle_session"
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(hours=12)
 
 # Firebase configuration (Realtime Database URL and Secret for auth)
 FIREBASE_RTDB_URL = os.getenv(
     "FIREBASE_RTDB_URL", "https://randomizer-events-default-rtdb.asia-southeast1.firebasedatabase.app"
 )
-FIREBASE_SECRET = os.getenv("FIREBASE_SECRET", "VvlSfG6dBnaj6KFZPSVkoARQ4MoPiITBqaP5N8Zc")
+FIREBASE_SECRET = (os.getenv("FIREBASE_SECRET") or "").strip()
+if not FIREBASE_SECRET:
+    app.logger.warning("FIREBASE_SECRET is not configured. Set it in your environment before deploying to production.")
 
 _ORIGINAL_REQUESTS = {
     name: getattr(requests, name)
@@ -126,6 +137,35 @@ def login_required(view_func):
         return view_func(*args, **kwargs)
 
     return wrapped_view
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add a strong baseline security layer for browsers and session handling."""
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "0"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "frame-ancestors 'self'; "
+        "form-action 'self'"
+    )
+    if not app.debug:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 def default_registration_fields():

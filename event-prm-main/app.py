@@ -32,14 +32,25 @@ static_dir = os.path.join(base_dir, 'static')
 app = Flask(__name__, 
             template_folder=template_dir, 
             static_folder=static_dir)
-# SECRET_KEY is used for session management and flashing messages
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
+secret_key = os.getenv("SECRET_KEY") or os.getenv("FLASK_SECRET_KEY")
+if not secret_key:
+    app.logger.warning("SECRET_KEY is not configured. Set it in the environment before deployment.")
+    secret_key = "__replace_with_strong_random_value__"
+app.config["SECRET_KEY"] = secret_key
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = not app.debug
+app.config["SESSION_COOKIE_NAME"] = "raffle_session"
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(hours=12)
 
 # Firebase configuration (Realtime Database URL and Secret for auth)
 FIREBASE_RTDB_URL = os.getenv(
     "FIREBASE_RTDB_URL", "https://randomizer-events-default-rtdb.asia-southeast1.firebasedatabase.app"
 )
-FIREBASE_SECRET = os.getenv("FIREBASE_SECRET", "VvlSfG6dBnaj6KFZPSVkoARQ4MoPiITBqaP5N8Zc")
+FIREBASE_SECRET = (os.getenv("FIREBASE_SECRET") or "").strip()
+if not FIREBASE_SECRET:
+    app.logger.warning("FIREBASE_SECRET is not configured. Set it in your environment before deploying to production.")
 
 # --- HELPERS ---
 def get_firebase_url(path):
