@@ -102,7 +102,8 @@ function animateSlotSpin(finalWinnerName, sourceNames = getAvailableParticipants
   if (!primaryList) return Promise.resolve();
 
   const start = performance.now();
-  const duration = 1500;
+  const duration = 5000;
+  primaryList.classList.add("is-spinning");
 
   return new Promise((resolve) => {
     const tick = (now) => {
@@ -121,6 +122,7 @@ function animateSlotSpin(finalWinnerName, sourceNames = getAvailableParticipants
       if (progress < 1) {
         requestAnimationFrame(tick);
       } else {
+        primaryList.classList.remove("is-spinning");
         renderSlots([finalWinnerName]);
         resolve();
       }
