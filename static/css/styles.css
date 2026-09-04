@@ -748,13 +748,55 @@ hr {
   letter-spacing: -0.02em;
 }
 
+.wheel-banner-copy {
+  min-width: 0;
+}
+
 .wheel-banner-subtitle {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
-.wheel-banner-message {
-  color: rgba(255, 255, 255, 0.8) !important;
-  max-width: 220px;
+.wheel-banner-image {
+  flex: 0 0 auto;
+  width: 150px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.wheel-banner-image img {
+  max-width: 150px;
+  max-height: 64px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.banner-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.banner-image-preview img {
+  width: 150px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 575.98px) {
+  .wheel-banner-layout {
+    align-items: flex-start !important;
+  }
+
+  .wheel-banner-image {
+    width: 100px;
+    justify-content: flex-end;
+  }
 }
 
 .prize-banner {
@@ -1007,6 +1049,7 @@ body.presentation-mode .slot-machine-shell {
   transform: scale(1.1);
   transform-origin: center top;
   max-width: 100%;
+  margin-bottom: 3.5rem !important;
 }
 
 body.presentation-mode .glass-winner-card {
@@ -1016,6 +1059,29 @@ body.presentation-mode .glass-winner-card {
 
 body.presentation-mode .list-group {
   max-height: 240px !important;
+}
+
+body.presentation-mode .winners-list-expanded {
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+
+body.presentation-mode #winnersList .list-group-item {
+  justify-content: center !important;
+  text-align: center;
+}
+
+body.presentation-mode #winnersList .list-group-item > div {
+  margin-right: 0 !important;
+  text-align: center;
+}
+
+body.presentation-mode .glass-winner-card > .mb-3 {
+  text-align: center;
+}
+
+body.presentation-mode #raffleLoop {
+  text-align: center;
 }
 
 body.presentation-mode .presentation-wheel-column {

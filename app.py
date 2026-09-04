@@ -588,11 +588,21 @@ def admin_event_detail(event_id):
             title = request.form.get("portal_title", "").strip() or request.form.get("event_name", "").strip()
             subtitle = request.form.get("banner_subtitle", "").strip()
             banner_title = request.form.get("banner_title", "").strip()
-            banner_message = request.form.get("banner_message", "").strip()
+            banner_image = request.form.get("banner_image", "").strip()
             accent_color = request.form.get("accent_color", "#5FE0A5").strip()
 
             if not title:
                 flash("Event title is required.", "danger")
+                return redirect(url_for("admin_event_detail", event_id=event_id))
+
+            allowed_banner_image_prefixes = (
+                "data:image/png;base64,",
+                "data:image/jpeg;base64,",
+                "data:image/gif;base64,",
+                "data:image/webp;base64,",
+            )
+            if banner_image and (not banner_image.startswith(allowed_banner_image_prefixes) or len(banner_image) > 4 * 1024 * 1024):
+                flash("Please choose an image smaller than 3 MB.", "danger")
                 return redirect(url_for("admin_event_detail", event_id=event_id))
 
             event_payload = {
@@ -600,7 +610,7 @@ def admin_event_detail(event_id):
                 "portal_title": title,
                 "banner_title": banner_title or title,
                 "banner_subtitle": subtitle,
-                "banner_message": banner_message,
+                "banner_image": banner_image,
                 "accent_color": accent_color,
                 "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }

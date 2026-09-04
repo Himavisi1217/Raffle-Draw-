@@ -116,8 +116,14 @@ endblock %} {% block content %}
               <input type="color" class="form-control form-control-modern form-control-color" id="accent_color" name="accent_color" value="{{ event.accent_color or '#5FE0A5' }}" />
             </div>
             <div class="col-12">
-              <label for="banner_message" class="form-label">Banner Message</label>
-              <textarea class="form-control form-control-modern" id="banner_message" name="banner_message" rows="3" placeholder="Add a short message or instruction for the raffle page">{{ event.banner_message or '' }}</textarea>
+              <label for="banner_image_file" class="form-label">Banner Image or Logo</label>
+              <input type="file" class="form-control form-control-modern" id="banner_image_file" accept="image/*" />
+              <input type="hidden" id="banner_image" name="banner_image" value="{{ event.banner_image or '' }}" />
+              <div class="form-text">Displayed at the top-right of the raffle banner. Maximum 3 MB.</div>
+              <div id="bannerImagePreview" class="banner-image-preview mt-2{% if not event.banner_image %} d-none{% endif %}">
+                <img src="{{ event.banner_image or '' }}" alt="Current banner logo" />
+                <button type="button" class="btn btn-outline-danger btn-sm" id="removeBannerImage">Remove image</button>
+              </div>
             </div>
           </div>
           <div class="d-flex justify-content-end mt-3">
@@ -495,6 +501,36 @@ endblock %} {% block content %}
   const tableBody = document.getElementById("participantsTableBody");
   const totalBadge = document.getElementById("participantCountBadge");
   const registrationFields = {{ registration_fields|tojson }};
+
+  const bannerImageFile = document.getElementById("banner_image_file");
+  const bannerImageInput = document.getElementById("banner_image");
+  const bannerImagePreview = document.getElementById("bannerImagePreview");
+  const bannerImagePreviewImage = bannerImagePreview?.querySelector("img");
+
+  bannerImageFile?.addEventListener("change", () => {
+    const file = bannerImageFile.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      window.alert("Please choose an image smaller than 3 MB.");
+      bannerImageFile.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      bannerImageInput.value = reader.result;
+      bannerImagePreviewImage.src = reader.result;
+      bannerImagePreview.classList.remove("d-none");
+    });
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("removeBannerImage")?.addEventListener("click", () => {
+    bannerImageInput.value = "";
+    bannerImageFile.value = "";
+    bannerImagePreview.classList.add("d-none");
+    bannerImagePreviewImage.removeAttribute("src");
+  });
 
   document.querySelectorAll('.prize-priority-select').forEach((select) => {
     select.addEventListener('change', async function () {

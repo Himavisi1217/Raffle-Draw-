@@ -24,6 +24,7 @@ const winnerCountBadge = document.getElementById("winnerCountBadge");
 const numWinnersInput = document.getElementById("numWinners");
 const raffleLoop = document.getElementById("raffleLoop");
 const currentPrizeName = document.getElementById("currentPrizeName");
+const showAllWinnersButton = document.getElementById("showAllWinnersButton");
 const slotLists = Array.from(document.querySelectorAll(".slot-list"));
 
 function sortPrizes(list) {
@@ -93,8 +94,8 @@ function renderSlots(targetNames) {
     .join("");
 }
 
-function animateSlotSpin(finalWinnerName) {
-  const availableNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
+function animateSlotSpin(finalWinnerName, sourceNames = getAvailableParticipants().map((person) => person.name).filter(Boolean)) {
+  const availableNames = sourceNames.filter(Boolean);
   if (!availableNames.length) return Promise.resolve();
 
   const primaryList = slotLists[0];
@@ -151,7 +152,7 @@ function publishClearToPopup() {
   }
 }
 
-function applyPresentationSpin(payload) {
+async function applyPresentationSpin(payload) {
   if (!PRESENTATION_MODE || !payload) return;
   if (payload.eventId && payload.eventId !== EVENT_ID) return;
 
@@ -180,6 +181,8 @@ function applyPresentationSpin(payload) {
     return;
   }
 
+  const spinNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
+
   if (!alreadySelected) {
     const winner = participants.find((person) => String(person.id) === String(winnerId)) || {
       id: winnerId,
@@ -194,6 +197,11 @@ function applyPresentationSpin(payload) {
   }
 
   pendingPresentationPayload = null;
+  if (wheelSelectedName) wheelSelectedName.textContent = "Spinning...";
+  renderSlots(spinNames);
+  spinning = true;
+  await animateSlotSpin(winnerName, spinNames);
+  spinning = false;
   if (wheelSelectedName) wheelSelectedName.textContent = winnerName;
   setCurrentPrizeDisplay();
 }
@@ -444,6 +452,15 @@ async function clearWinners() {
 
 if (spinButton) spinButton.addEventListener("click", spinAndPickLocal);
 if (clearButton) clearButton.addEventListener("click", clearWinners);
+if (showAllWinnersButton) {
+  showAllWinnersButton.addEventListener("click", () => {
+    const expanded = winnersList?.classList.toggle("winners-list-expanded");
+    showAllWinnersButton.innerHTML = expanded
+      ? '<i data-lucide="chevron-up" style="width:14px;height:14px;"></i> Hide Winners List'
+      : '<i data-lucide="list" style="width:14px;height:14px;"></i> Show Full Winners List';
+    if (window.lucide) lucide.createIcons();
+  });
+}
 
 if (PRESENTATION_MODE) {
   window.addEventListener("storage", (event) => {
