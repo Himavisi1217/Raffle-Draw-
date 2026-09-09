@@ -14,6 +14,8 @@ let pendingPresentationPayload = null;
 let spinning = false;
 let raffleIndex = 0;
 let raffleTimer = null;
+let lastDisplayedWinnerSignature = "";
+let lastKnownPublicWinnerSignature = "";
 
 const spinButton = document.getElementById("spinButton");
 const clearButton = document.getElementById("clearButton");
@@ -137,6 +139,67 @@ function animateSlotSpin(finalWinnerName, sourceNames = getAvailableParticipants
   });
 }
 
+function getWinnerSignature(entry) {
+  if (!entry || !entry.winner || !entry.prize) return "";
+  return `${String(entry.winner.id || "")}::${String(entry.prize.id || "")}`;
+}
+
+function syncPublicPresentationFromServer() {
+  if (!PRESENTATION_MODE || spinning || !selectedWinners.length) return;
+
+  const latestWinner = selectedWinners[selectedWinners.length - 1];
+  const signature = getWinnerSignature(latestWinner);
+  if (!signature || signature === lastDisplayedWinnerSignature) return;
+
+  lastDisplayedWinnerSignature = signature;
+  const spinNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
+  if (!spinNames.length) return;
+
+  if (wheelSelectedName) wheelSelectedName.textContent = "Spinning...";
+  renderSlots(spinNames, latestWinner.winner.name);
+  spinning = true;
+  animateSlotSpin(latestWinner.winner.name, spinNames).finally(() => {
+    spinning = false;
+    if (wheelSelectedName) wheelSelectedName.textContent = latestWinner.winner.name;
+    setCurrentPrizeDisplay();
+  });
+}
+
+async function refreshPublicPresentationFromServer() {
+  if (!PRESENTATION_MODE || spinning || !EVENT_ID) return;
+
+  try {
+    const response = await fetch(API_WINNERS, { cache: "no-store" });
+    if (!response.ok) return;
+
+    const winners = await response.json();
+    if (!winners || typeof winners !== "object") return;
+
+    const entries = Object.values(winners).filter((item) => item && typeof item === "object");
+    const latestEntry = entries.length ? entries[entries.length - 1] : null;
+    const signature = latestEntry && latestEntry.winner_id && latestEntry.prize_id
+      ? `${String(latestEntry.winner_id)}::${String(latestEntry.prize_id)}`
+      : "";
+
+    if (!signature || signature === lastKnownPublicWinnerSignature) return;
+
+    lastKnownPublicWinnerSignature = signature;
+    const winnerName = latestEntry.winner_name || "Winner";
+    const spinNames = participants.map((person) => person.name).filter(Boolean);
+    if (!spinNames.length) return;
+
+    if (wheelSelectedName) wheelSelectedName.textContent = "Spinning...";
+    renderSlots(spinNames, winnerName);
+    spinning = true;
+    await animateSlotSpin(winnerName, spinNames);
+    spinning = false;
+    if (wheelSelectedName) wheelSelectedName.textContent = winnerName;
+    setCurrentPrizeDisplay();
+  } catch (error) {
+    console.error("Public display sync failed:", error);
+  }
+}
+
 function publishSpinToPopup(payload) {
   if (!payload || !EVENT_ID) return;
   const data = { ...payload, eventId: EVENT_ID, timestamp: Date.now() };
@@ -256,6 +319,11 @@ async function loadData() {
       });
     }
     selectedWinners = sortSelectedWinners(selectedWinners);
+
+    if (PRESENTATION_MODE) {
+      syncPublicPresentationFromServer();
+      refreshPublicPresentationFromServer();
+    }
 
     if (prizeCountBadge) {
       prizeCountBadge.innerHTML = `<i data-lucide="gift" style="width:12px;height:12px;margin-right:4px;vertical-align:-1px"></i>${prizes.length} prizes | ${participants.length} participants`;
@@ -436,6 +504,7 @@ async function spinAndPickLocal() {
 
 function clearPresentationState() {
   selectedWinners = [];
+  lastDisplayedWinnerSignature = "";
   updateWinnersUI();
   if (wheelSelectedName) wheelSelectedName.textContent = "Ready";
   if (raffleLoop) raffleLoop.textContent = "Now showing: " + (getAvailableParticipants()[0]?.name || "Waiting for participants...");
@@ -491,5 +560,6 @@ if (slotLists.length) {
   loadData();
   setInterval(() => {
     if (!spinning) loadData();
-  }, 5000);
+    if (PRESENTATION_MODE) refreshPublicPresentationFromServer();
+  }, 3000);
 }
