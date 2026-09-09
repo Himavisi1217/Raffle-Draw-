@@ -234,6 +234,11 @@ async function applyPresentationSpin(payload) {
   const prizeName = payload.prizeName || payload.prize?.name || "Prize";
 
   if (!winnerId || !prizeId) return;
+  const signature = `${String(winnerId)}::${String(prizeId)}`;
+  if (signature === lastDisplayedWinnerSignature || signature === lastKnownPublicWinnerSignature) {
+    if (wheelSelectedName && !spinning) wheelSelectedName.textContent = winnerName;
+    return;
+  }
   if (!Array.isArray(participants) || !Array.isArray(prizes) || !participants.length || !prizes.length) {
     pendingPresentationPayload = payload;
     return;
@@ -248,10 +253,6 @@ async function applyPresentationSpin(payload) {
   const alreadySelected = selectedWinners.some(
     (item) => String(item.winner.id) === String(winnerId) && String(item.prize.id) === String(prizeId)
   );
-
-  if (isWinnerAlreadySelected(winnerId)) {
-    return;
-  }
 
   const spinNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
 
@@ -268,7 +269,6 @@ async function applyPresentationSpin(payload) {
     saveWinnerToServer({ prizeId, winnerId, prizeName, winnerName });
   }
 
-  const signature = `${String(winnerId)}::${String(prizeId)}`;
   lastDisplayedWinnerSignature = signature;
   lastKnownPublicWinnerSignature = signature;
   pendingPresentationPayload = null;
@@ -509,6 +509,7 @@ async function spinAndPickLocal() {
 function clearPresentationState() {
   selectedWinners = [];
   lastDisplayedWinnerSignature = "";
+  lastKnownPublicWinnerSignature = "";
   updateWinnersUI();
   if (wheelSelectedName) wheelSelectedName.textContent = "Ready";
   if (raffleLoop) raffleLoop.textContent = "Now showing: " + (getAvailableParticipants()[0]?.name || "Waiting for participants...");

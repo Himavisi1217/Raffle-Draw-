@@ -1604,9 +1604,17 @@ body.presentation-mode .prize-banner {
 
   body.presentation-mode .event-themed > .col-xl-8 {
     width: 100%;
+    margin-inline: auto;
+  }
+
+  body.presentation-mode .presentation-row > .col-12 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   body.presentation-mode .wheel-banner {
+    width: 100%;
     margin-bottom: 0.75rem !important;
   }
 
@@ -1653,6 +1661,7 @@ body.presentation-mode .prize-banner {
   }
 
   body.presentation-mode .prize-banner {
+    width: 100%;
     padding: 0.7rem 0.75rem !important;
     border-radius: 0.9rem !important;
   }
