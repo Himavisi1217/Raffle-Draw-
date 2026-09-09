@@ -152,6 +152,7 @@ function syncPublicPresentationFromServer() {
   if (!signature || signature === lastDisplayedWinnerSignature) return;
 
   lastDisplayedWinnerSignature = signature;
+  lastKnownPublicWinnerSignature = signature;
   const spinNames = getAvailableParticipants().map((person) => person.name).filter(Boolean);
   if (!spinNames.length) return;
 
@@ -184,6 +185,7 @@ async function refreshPublicPresentationFromServer() {
     if (!signature || signature === lastKnownPublicWinnerSignature) return;
 
     lastKnownPublicWinnerSignature = signature;
+    lastDisplayedWinnerSignature = signature;
     const winnerName = latestEntry.winner_name || "Winner";
     const spinNames = participants.map((person) => person.name).filter(Boolean);
     if (!spinNames.length) return;
@@ -266,6 +268,9 @@ async function applyPresentationSpin(payload) {
     saveWinnerToServer({ prizeId, winnerId, prizeName, winnerName });
   }
 
+  const signature = `${String(winnerId)}::${String(prizeId)}`;
+  lastDisplayedWinnerSignature = signature;
+  lastKnownPublicWinnerSignature = signature;
   pendingPresentationPayload = null;
   if (wheelSelectedName) wheelSelectedName.textContent = "Spinning...";
   renderSlots(spinNames);
