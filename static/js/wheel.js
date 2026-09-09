@@ -326,7 +326,6 @@ async function loadData() {
     selectedWinners = sortSelectedWinners(selectedWinners);
 
     if (PRESENTATION_MODE) {
-      syncPublicPresentationFromServer();
       refreshPublicPresentationFromServer();
     }
 
