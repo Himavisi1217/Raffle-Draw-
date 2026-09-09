@@ -114,12 +114,10 @@ endblock %} {% block content %}
 
               <ul class="list-group list-group-flush small flex-grow-1" id="winnersList" style="overflow-y: auto; max-height: 220px"></ul>
 
-              {% if presentation_mode %}
-              <button id="showAllWinnersButton" type="button" class="btn btn-outline-light btn-sm mt-3 d-flex align-items-center justify-content-center gap-2">
+              <button id="showAllWinnersButton" type="button" class="btn btn-outline-light btn-sm mt-3 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#allWinnersModal">
                 <i data-lucide="list" style="width:14px;height:14px;"></i>
-                Show Full Winners List
+                View Winners List
               </button>
-              {% endif %}
 
               {% if not presentation_mode %}
               <div class="mt-4 pt-3 border-top">
@@ -140,6 +138,23 @@ endblock %} {% block content %}
   </div>
 </div>
 
+<div class="modal fade" id="allWinnersModal" tabindex="-1" aria-labelledby="allWinnersModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content card-glass">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="allWinnersModalLabel">Winners List</h5>
+          <div class="small text-muted" id="winnersModalCount">0 selected</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="list-group list-group-flush" id="winnersModalList"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %} {% block scripts %}
 <script>
   window.CURRENT_EVENT_ID = "{{ event_id }}";
@@ -149,7 +164,7 @@ endblock %} {% block content %}
   document.body.classList.toggle('presentation-mode', window.PRESENTATION_MODE);
 
   const openRaffleWindowButton = document.getElementById("openRaffleWindowButton");
-  const rafflePresentationUrl = "{{ url_for('wheel', event_id=event_id, presentation='1') }}";
+  const rafflePresentationUrl = "{{ url_for('public_wheel', event_id=event_id) }}";
 
   if (openRaffleWindowButton) {
     openRaffleWindowButton.addEventListener("click", () => {

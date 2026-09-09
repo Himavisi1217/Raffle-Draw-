@@ -594,7 +594,7 @@ a:hover {
 
 /* --- MODAL (Dark Glass) --- */
 .modal-content {
-  background: var(--bg-surface) !important;
+  background: #000000 !important;
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-lg), var(--shadow-glow) !important;
@@ -602,7 +602,7 @@ a:hover {
 }
 
 .modal-content.card-glass {
-  background: var(--bg-surface) !important;
+  background: #000000 !important;
   backdrop-filter: blur(30px) saturate(1.4);
 }
 
@@ -634,6 +634,23 @@ a:hover {
 
 .modal-backdrop.show {
   backdrop-filter: blur(4px);
+}
+
+#allWinnersModal .modal-content,
+#allWinnersModal .modal-header,
+#allWinnersModal .modal-body,
+#allWinnersModal .list-group,
+#allWinnersModal .list-group-item {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+#allWinnersModal .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#allWinnersModal .text-muted {
+  color: #d1d5db !important;
 }
 
 .btn-close {

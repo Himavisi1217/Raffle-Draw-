@@ -51,6 +51,15 @@ endblock %} {% block content %}
           Open Raffle Draw
         </a>
         <a
+          href="{{ url_for('public_wheel', event_id=event.id) }}"
+          class="btn btn-outline-secondary btn-modern btn-sm"
+          target="_blank"
+          rel="noopener"
+        >
+          <i data-lucide="monitor-play" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
+          Public Display
+        </a>
+        <a
           href="{{ url_for('register', event_id=event.id) }}"
           class="btn btn-outline-primary btn-modern btn-sm"
           target="_blank"
@@ -64,7 +73,15 @@ endblock %} {% block content %}
           class="btn btn-outline-primary btn-modern btn-sm"
         >
           <i data-lucide="file-spreadsheet" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px"></i>
-          Download Excel
+          Download Participants
+        </a>
+        <a
+          href="{{ url_for('export_winners', event_id=event.id) }}"
+          class="btn btn-outline-success btn-modern btn-sm"
+          style="color: #ffffff !important;"
+        >
+          <i data-lucide="award" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px; color: #ffffff;"></i>
+          Download Winners Excel
         </a>
         <form
           method="post"

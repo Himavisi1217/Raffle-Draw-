@@ -234,3 +234,57 @@ body {
   color: #0f172a;
   font-weight: 600;
 }
+
+/* Keep the wheel and winners popup readable against the presentation background. */
+body.bg-gradient {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(45, 212, 191, 0.24), transparent 28%),
+    radial-gradient(circle at 86% 82%, rgba(59, 130, 246, 0.28), transparent 32%),
+    linear-gradient(135deg, #071426 0%, #102a43 52%, #123b4b 100%);
+  color: #f8fafc;
+}
+
+body.bg-gradient .card-glass,
+body.bg-gradient .glass-winner-card {
+  background: rgba(7, 18, 36, 0.82);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #f8fafc;
+  box-shadow: 0 20px 45px rgba(2, 8, 23, 0.3);
+}
+
+body.bg-gradient .glass-winner-card .winner-title,
+body.bg-gradient .glass-winner-card .winner-main,
+body.bg-gradient .list-group-item,
+body.bg-gradient .text-muted {
+  color: #e2e8f0 !important;
+}
+
+body.bg-gradient .modal-content.card-glass {
+  background: #000000;
+  color: #f8fafc;
+}
+
+body.bg-gradient .modal-header {
+  border-bottom-color: rgba(148, 163, 184, 0.24);
+}
+
+body.bg-gradient .modal-backdrop.show {
+  opacity: 0.78;
+}
+
+#allWinnersModal .modal-content,
+#allWinnersModal .modal-header,
+#allWinnersModal .modal-body,
+#allWinnersModal .list-group,
+#allWinnersModal .list-group-item {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+#allWinnersModal .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#allWinnersModal .text-muted {
+  color: #d1d5db !important;
+}

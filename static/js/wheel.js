@@ -24,7 +24,8 @@ const winnerCountBadge = document.getElementById("winnerCountBadge");
 const numWinnersInput = document.getElementById("numWinners");
 const raffleLoop = document.getElementById("raffleLoop");
 const currentPrizeName = document.getElementById("currentPrizeName");
-const showAllWinnersButton = document.getElementById("showAllWinnersButton");
+const winnersModalList = document.getElementById("winnersModalList");
+const winnersModalCount = document.getElementById("winnersModalCount");
 const slotLists = Array.from(document.querySelectorAll(".slot-list"));
 
 function sortPrizes(list) {
@@ -79,14 +80,18 @@ function buildSlotValues(names, count = 13) {
   return repeated;
 }
 
-function renderSlots(targetNames) {
+function renderSlots(targetNames, winnerName = null) {
   const primaryList = slotLists[0];
   if (!primaryList) return;
 
+  const names = Array.isArray(targetNames) && targetNames.length ? targetNames.filter(Boolean) : ["Waiting"];
+  const baseWinner = winnerName && names.includes(winnerName) ? winnerName : names[0] || "Waiting";
+  const rotationNames = names.length > 1 ? [...names, ...names] : names;
+  const startIndex = rotationNames.indexOf(baseWinner);
+
   const values = Array.from({ length: 9 }, (_, index) => {
-    if (index === 4) return targetNames[0] || "Waiting";
-    const fallback = targetNames[0] || "Waiting";
-    return fallback;
+    const targetIndex = startIndex + index - 4;
+    return rotationNames[targetIndex] || baseWinner;
   });
 
   primaryList.innerHTML = values
@@ -123,7 +128,7 @@ function animateSlotSpin(finalWinnerName, sourceNames = getAvailableParticipants
         requestAnimationFrame(tick);
       } else {
         primaryList.classList.remove("is-spinning");
-        renderSlots([finalWinnerName]);
+        renderSlots(availableNames, finalWinnerName);
         resolve();
       }
     };
@@ -297,12 +302,8 @@ function updateButtonState() {
 function updateWinnersUI() {
   if (!winnersList) return;
   selectedWinners = sortSelectedWinners(selectedWinners);
-  winnersList.innerHTML = "";
-  selectedWinners.forEach((item, index) => {
-    const li = document.createElement("li");
-    li.className = "list-group-item d-flex justify-content-between align-items-start";
-    li.style.animation = "fadeIn 0.5s ease-in-out";
-    li.innerHTML = `
+  const renderWinnerItem = (item, index) => `
+    <li class="list-group-item d-flex justify-content-between align-items-start" style="animation: fadeIn 0.5s ease-in-out">
       <div class="me-2 w-100">
         <div class="fw-semibold text-primary">${index + 1}. <span class="text-primary">${item.winner.name}</span></div>
         <div class="text-muted small mb-1">${item.winner.company_name || ""} ${item.winner.position ? "· " + item.winner.position : ""}</div>
@@ -311,12 +312,18 @@ function updateWinnersUI() {
           Won: ${item.prize.name}
         </div>
       </div>
-    `;
-    winnersList.appendChild(li);
-  });
+    </li>
+  `;
+
+  winnersList.innerHTML = selectedWinners.map(renderWinnerItem).join("");
+
+  if (winnersModalList) {
+    winnersModalList.innerHTML = selectedWinners.map(renderWinnerItem).join("");
+  }
 
   if (window.lucide) lucide.createIcons();
   if (winnerCountBadge) winnerCountBadge.textContent = `${selectedWinners.length} selected`;
+  if (winnersModalCount) winnersModalCount.textContent = `${selectedWinners.length} selected`;
 }
 
 function updateRaffleLoop() {
@@ -454,16 +461,6 @@ async function clearWinners() {
 
 if (spinButton) spinButton.addEventListener("click", spinAndPickLocal);
 if (clearButton) clearButton.addEventListener("click", clearWinners);
-if (showAllWinnersButton) {
-  showAllWinnersButton.addEventListener("click", () => {
-    const expanded = winnersList?.classList.toggle("winners-list-expanded");
-    showAllWinnersButton.innerHTML = expanded
-      ? '<i data-lucide="chevron-up" style="width:14px;height:14px;"></i> Hide Winners List'
-      : '<i data-lucide="list" style="width:14px;height:14px;"></i> Show Full Winners List';
-    if (window.lucide) lucide.createIcons();
-  });
-}
-
 if (PRESENTATION_MODE) {
   window.addEventListener("storage", (event) => {
     if (event.key !== SPIN_SYNC_KEY || !event.newValue) return;

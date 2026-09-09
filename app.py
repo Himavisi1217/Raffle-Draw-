@@ -19,6 +19,7 @@ from flask import (
     jsonify,
     session,
     send_file,
+    abort,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -363,6 +364,48 @@ def register_success(event_id):
     return render_template("success.html", event_id=event_id)
 
 
+@app.route("/events/<event_id>/display")
+def public_wheel(event_id):
+    """Public display page used for the spectator popup window."""
+    event_url = get_firebase_url(f"/events/{event_id}")
+    resp = requests.get(event_url)
+    event_data = resp.json() if resp.status_code == 200 else {}
+    if not isinstance(event_data, dict):
+        event_data = {}
+
+    prize_resp = requests.get(get_firebase_url(f"/prizes/{event_id}"))
+    prize_data = prize_resp.json() if prize_resp.status_code == 200 else {}
+    participant_resp = requests.get(get_firebase_url(f"/participants/{event_id}"))
+    participant_data = participant_resp.json() if participant_resp.status_code == 200 else {}
+
+    initial_prizes = []
+    initial_participants = []
+    if isinstance(prize_data, dict):
+        for prize_id, prize in prize_data.items():
+            if isinstance(prize, dict):
+                prize = dict(prize)
+                prize["id"] = prize_id
+                initial_prizes.append(prize)
+    if isinstance(participant_data, dict):
+        for participant_id, participant in participant_data.items():
+            if isinstance(participant, dict):
+                participant = dict(participant)
+                participant["id"] = participant_id
+                initial_participants.append(participant)
+
+    initial_prizes.sort(key=lambda item: (int(item.get("sort_order") or 0), item.get("created_at", "")))
+    initial_participants.sort(key=lambda item: item.get("created_at", ""))
+    return render_template(
+        "wheel.html",
+        event_id=event_id,
+        event=event_data,
+        initial_prizes=initial_prizes,
+        initial_participants=initial_participants,
+        presentation_mode=True,
+        public_display=True,
+    )
+
+
 @app.route("/admin/events/<event_id>/wheel")
 @login_required
 def wheel(event_id):
@@ -401,17 +444,20 @@ def wheel(event_id):
         initial_prizes=initial_prizes,
         initial_participants=initial_participants,
         presentation_mode=presentation_mode,
+        public_display=False,
     )
 
 
 @app.route("/api/winners/<event_id>", methods=["GET", "POST", "DELETE"])
-@login_required
 def api_winners(event_id):
     """Store and retrieve prize to winner assignments for an event."""
     winners_url = get_firebase_url(f"/winners/{event_id}")
     if request.method == "GET":
         winners = get_event_winners(event_id)
         return jsonify(winners)
+
+    if not session.get("admin_id"):
+        return jsonify({"error": "Unauthorized."}), 401
 
     if request.method == "DELETE":
         requests.delete(winners_url)
@@ -447,7 +493,6 @@ def api_winners(event_id):
 
 
 @app.route("/api/participants/<event_id>")
-@login_required
 def api_participants(event_id):
     """
     API endpoint that returns a sorted list of participants for a given event.
@@ -458,19 +503,16 @@ def api_participants(event_id):
     data = resp.json() or {}
     
     participants = []
-    # Firebase returns a dict with auto-generated IDs as keys; we convert it to a list
     if isinstance(data, dict):
         for pid, pdata in data.items():
             pdata["id"] = pid
             participants.append(pdata)
             
-    # Sort by registration time
     participants.sort(key=lambda x: x.get("created_at", ""))
     return jsonify(participants)
 
 
 @app.route("/api/prizes/<event_id>")
-@login_required
 def api_prizes(event_id):
     """
     API endpoint that returns a list of prizes for a given event.
@@ -784,6 +826,41 @@ def export_participants(event_id):
                 ])
 
     filename = f"{event_data.get('name', 'event').strip() or 'event'}_participants.csv"
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@app.route("/admin/events/<event_id>/winners/export")
+@login_required
+def export_winners(event_id):
+    """Download all raffle winners as an Excel-compatible CSV file."""
+    event_resp = requests.get(get_firebase_url(f"/events/{event_id}"))
+    event_data = event_resp.json() if event_resp.status_code == 200 else {}
+    if not event_data:
+        flash("Event not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    winners_data = get_event_winners(event_id)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Prize", "Winner Name", "Winner ID", "Selected At"])
+
+    if isinstance(winners_data, dict):
+        for prize_id, winner_entry in winners_data.items():
+            if not isinstance(winner_entry, dict):
+                continue
+            writer.writerow([
+                winner_entry.get("prize_name") or prize_id,
+                winner_entry.get("winner_name") or "",
+                winner_entry.get("winner_id") or "",
+                winner_entry.get("selected_at") or "",
+            ])
+
+    filename = f"{event_data.get('name', 'event').strip() or 'event'}_winners.csv"
     return send_file(
         io.BytesIO(output.getvalue().encode("utf-8-sig")),
         mimetype="text/csv",

@@ -22,6 +22,8 @@ const wheelSelectedName = document.getElementById("wheelSelectedName");
 const participantCountBadge = document.getElementById("participantCountBadge");
 const winnerCountBadge = document.getElementById("winnerCountBadge");
 const numWinnersInput = document.getElementById("numWinners");
+const winnersModalList = document.getElementById("winnersModalList");
+const winnersModalCount = document.getElementById("winnersModalCount");
 
 /**
  * Fisher-Yates shuffle algorithm to randomize an array in place.
@@ -135,31 +137,24 @@ function drawWheel() {
  * Updates the "Winners" sidebar with the list of people picked.
  */
 function updateWinnersUI() {
-  winnersList.innerHTML = "";
-  selectedWinners.forEach((w, index) => {
-    const li = document.createElement("li");
-    li.className =
-      "list-group-item d-flex justify-content-between align-items-start";
-    li.style.animation = "fadeIn 0.5s ease-in-out";
-    li.innerHTML = `
-      <div class="me-2">
-        <div class="fw-semibold text-primary">${index + 1}. ${w.name}</div>
-        <div class="text-muted small">${w.company_name} · ${w.position}</div>
+  const renderWinner = (winner, index) => `
+    <li class="list-group-item d-flex justify-content-between align-items-start" style="animation: fadeIn 0.5s ease-in-out">
+      <div class="me-2 w-100">
+        <div class="fw-semibold text-primary">${index + 1}. ${winner.name}</div>
+        <div class="text-muted small">${winner.company_name || ""} ${winner.position ? "· " + winner.position : ""}</div>
       </div>
-    `;
-    
-    // Inject CSS for the fade-in effect if not already present
-    if (!document.getElementById("fadeInKeyframes")) {
-      const style = document.createElement("style");
-      style.id = "fadeInKeyframes";
-      style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`;
-      document.head.appendChild(style);
-    }
-    winnersList.appendChild(li);
-  });
+    </li>
+  `;
+
+  const winnerItems = selectedWinners.map(renderWinner).join("");
+  winnersList.innerHTML = winnerItems;
+  if (winnersModalList) winnersModalList.innerHTML = winnerItems;
 
   if (winnerCountBadge) {
     winnerCountBadge.textContent = `${selectedWinners.length} selected`;
+  }
+  if (winnersModalCount) {
+    winnersModalCount.textContent = `${selectedWinners.length} selected`;
   }
 }
 
